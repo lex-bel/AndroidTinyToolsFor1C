@@ -46,6 +46,10 @@ public:
         eMethGetDeviceId = 8,
         eMethStartCameraBarcodeScanner = 9,
         eMethStopCameraBarcodeScanner = 10,
+        eMethGenerateQrCodeBase64 = 11,
+        eMethStartHttpServer = 12,
+        eMethStopHttpServer = 13,
+        eMethHttpServerRespond = 14,
         eMethLast      // Always last
     };
 
@@ -97,6 +101,10 @@ private:
     void GetDeviceId(tVariant* pvarRetValue);
     void StartCameraBarcodeScanner(tVariant* paParams, const long lSizeArray);
     void StopCameraBarcodeScanner();
+    void GenerateQrCodeBase64(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+    void StartHttpServer(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+    void StopHttpServer();
+    void HttpServerRespond(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
     void StopBroadcastReceiver();
 
     BroadcastReceiver broadcastReceiver;

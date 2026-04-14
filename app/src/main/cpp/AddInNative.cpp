@@ -17,7 +17,11 @@ static const std::array<std::u16string, CAddInNative::eMethLast> osMethods{
         u"isbluetoothscannerhandlerconnected",
         u"getdeviceid",
         u"startcamerabarcodescanner",
-        u"stopcamerabarcodescanner"
+        u"stopcamerabarcodescanner",
+        u"generateqrcodebase64",
+        u"starthttpserver",
+        u"stophttpserver",
+        u"httpserverrespond"
 };
 
 AppCapabilities g_capabilities = eAppCapabilitiesInvalid;
@@ -82,6 +86,7 @@ long CAddInNative::GetInfo()
 //---------------------------------------------------------------------------//
 void CAddInNative::Done()
 {
+    StopHttpServer();
     m_iConnect = NULL;
 }
 /////////////////////////////////////////////////////////////////////////////
@@ -199,7 +204,7 @@ long CAddInNative::GetNParams(const long lMethodNum)
         case eMethVibrate:
             return 1;
         case eMethBeep:
-            return 1;
+            return 2;
         case eMethToast:
             return 1;
         case eMethStartBroadcastReceiver:
@@ -208,6 +213,12 @@ long CAddInNative::GetNParams(const long lMethodNum)
             return 1;
         case eMethStartCameraBarcodeScanner:
             return 5;
+        case eMethGenerateQrCodeBase64:
+            return 2;
+        case eMethStartHttpServer:
+            return 2;
+        case eMethHttpServerRespond:
+            return 1;
         default:
             return 0;
     }
@@ -229,9 +240,18 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
         }
         case eMethBeep:
         {
-            TV_VT(pvarParamDefValue) = VTYPE_I4;
-            pvarParamDefValue->lVal = 28;
-            return true;
+            if (lParamNum == 0) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 28;
+                return true;
+            }
+            if (lParamNum == 1) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 200;
+                return true;
+            }
+            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+            return false;
         }
         case eMethStartCameraBarcodeScanner:
         {
@@ -263,6 +283,21 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
             return false;
         }
+        case eMethStartHttpServer:
+        {
+            if (lParamNum == 0) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 8080;
+                return true;
+            }
+            if (lParamNum == 1) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 30000;
+                return true;
+            }
+            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+            return false;
+        }
         default:
         {
             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
@@ -287,6 +322,18 @@ bool CAddInNative::HasRetVal(const long lMethodNum)
             return true;
         }
         case eMethGetDeviceId:
+        {
+            return true;
+        }
+        case eMethGenerateQrCodeBase64:
+        {
+            return true;
+        }
+        case eMethStartHttpServer:
+        {
+            return true;
+        }
+        case eMethHttpServerRespond:
         {
             return true;
         }
@@ -342,6 +389,11 @@ bool CAddInNative::CallAsProc(const long lMethodNum,
             StopCameraBarcodeScanner();
             return true;
         }
+        case eMethStopHttpServer:
+        {
+            StopHttpServer();
+            return true;
+        }
         default:
             return false;
     }
@@ -367,6 +419,21 @@ bool CAddInNative::CallAsFunc(const long lMethodNum,
         case eMethGetDeviceId:
         {
             GetDeviceId(pvarRetValue);
+            return true;
+        }
+        case eMethGenerateQrCodeBase64:
+        {
+            GenerateQrCodeBase64(pvarRetValue, paParams, lSizeArray);
+            return true;
+        }
+        case eMethStartHttpServer:
+        {
+            StartHttpServer(pvarRetValue, paParams, lSizeArray);
+            return true;
+        }
+        case eMethHttpServerRespond:
+        {
+            HttpServerRespond(pvarRetValue, paParams, lSizeArray);
             return true;
         }
         default:
@@ -444,7 +511,15 @@ void CAddInNative::Beep(tVariant* paParams, const long lSizeArray) {
     jobject                     obj;
     IAddInDefBaseEx*            cnn;
 
-    int TONE = paParams[0].lVal;
+    int TONE = 28;
+    int durationMs = 200;
+
+    if (lSizeArray > 0 && TV_VT(&paParams[0]) == VTYPE_I4) {
+        TONE = paParams[0].lVal;
+    }
+    if (lSizeArray > 1 && TV_VT(&paParams[1]) == VTYPE_I4) {
+        durationMs = paParams[1].lVal;
+    }
 
     cnn = m_iConnect;
     helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
@@ -459,9 +534,9 @@ void CAddInNative::Beep(tVariant* paParams, const long lSizeArray) {
             cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
             jenv->DeleteLocalRef(ccloc);
             jobject activity = helper->GetActivity();
-            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;I)V");
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;II)V");
 
-            jobject objloc = jenv->NewObject(cc, ctorID, activity, (jint)TONE);
+            jobject objloc = jenv->NewObject(cc, ctorID, activity, (jint)TONE, (jint)durationMs);
             if (objloc)
             {
                 obj = jenv->NewGlobalRef(objloc);
@@ -762,8 +837,231 @@ void CAddInNative::StopCameraBarcodeScanner() {
     }
 }
 
+void CAddInNative::GenerateQrCodeBase64(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
+
+    TV_VT(pvarRetValue) = VTYPE_PWSTR;
+    pvarRetValue->wstrLen = 0;
+
+    if (lSizeArray < 2 || TV_VT(&paParams[0]) != VTYPE_PWSTR || TV_VT(&paParams[1]) != VTYPE_I4) {
+        return;
+    }
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/QrCodeGeneratorClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jstring qrText = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
+            jstring res = (jstring)jenv->CallObjectMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "generateQrCodeBase64", "(Ljava/lang/String;I)Ljava/lang/String;"),
+                    qrText,
+                    (jint)paParams[1].lVal
+            );
+
+            if (res != nullptr)
+            {
+                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
+                jenv->DeleteLocalRef(res);
+            }
+
+            jenv->DeleteLocalRef(qrText);
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::StartHttpServer(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
+
+    TV_VT(pvarRetValue) = VTYPE_BOOL;
+    pvarRetValue->bVal = false;
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/HttpServerClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;J)V");
+
+            jint port = 8080;
+            jint timeoutMs = 30000;
+            if (lSizeArray > 0 && TV_VT(&paParams[0]) == VTYPE_I4) {
+                port = (jint)paParams[0].lVal;
+            }
+            if (lSizeArray > 1 && TV_VT(&paParams[1]) == VTYPE_I4) {
+                timeoutMs = (jint)paParams[1].lVal;
+            }
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity, (jlong)this);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jboolean started = jenv->CallBooleanMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "startHttpServer", "(II)Z"),
+                    port,
+                    timeoutMs
+            );
+
+            pvarRetValue->bVal = (started == JNI_TRUE);
+
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::StopHttpServer() {
+
+    IAddInDefBaseEx* cnn = m_iConnect;
+    if (cnn == nullptr) {
+        return;
+    }
+
+    IAndroidComponentHelper* helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/HttpServerClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            jclass cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;J)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity, (jlong)this);
+            if (objloc)
+            {
+                jobject obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+                jenv->CallVoidMethod(obj, jenv->GetMethodID(cc, "stopHttpServer", "()V"));
+                jenv->DeleteGlobalRef(obj);
+            }
+
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::HttpServerRespond(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
+
+    TV_VT(pvarRetValue) = VTYPE_BOOL;
+    pvarRetValue->bVal = false;
+
+    if (lSizeArray < 1 || TV_VT(&paParams[0]) != VTYPE_PWSTR) {
+        return;
+    }
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/HttpServerClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;J)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity, (jlong)this);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jstring response = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
+            jboolean responded = jenv->CallBooleanMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "respond", "(Ljava/lang/String;)Z"),
+                    response
+            );
+
+            pvarRetValue->bVal = (responded == JNI_TRUE);
+
+            jenv->DeleteLocalRef(response);
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
 static const char16_t g_EventSource[] = u"AndroidTinyTools";
 static const char16_t g_OnBarcodeEventName[] = u"Barcode";
+static const char16_t g_OnHttpRequestEventName[] = u"http_request";
 
 extern "C" JNIEXPORT void JNICALL Java_com_alexkmbk_androidtinytools_BroadcastReceiverClass_BroadcastMessage(JNIEnv* jenv, jclass jClass, jlong pObject, jstring jsEventName, jstring jsExtraParam)
 {
@@ -817,6 +1115,23 @@ extern "C" JNIEXPORT void JNICALL Java_com_alexkmbk_androidtinytools_CameraBarco
             addInNative->m_iConnect->ExternalEvent((WCHAR_T*) g_EventSource,
                                                    (WCHAR_T*) g_OnBarcodeEventName,
                                                    wcBarcode);
+        }
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_alexkmbk_androidtinytools_HttpServerClass_OnHttpRequest(JNIEnv* jenv, jclass jClass, jlong pObject, jstring requestJson)
+{
+    CAddInNative *addInNative = (CAddInNative *) pObject;
+
+    if (addInNative) {
+
+        WCHAR_T *wcRequestJson = nullptr;
+        jstring2v8string(jenv, addInNative->m_iMemory, requestJson, &wcRequestJson);
+
+        if (addInNative->m_iConnect != NULL) {
+            addInNative->m_iConnect->ExternalEvent((WCHAR_T*) g_EventSource,
+                                                   (WCHAR_T*) g_OnHttpRequestEventName,
+                                                   wcRequestJson);
         }
     }
 }

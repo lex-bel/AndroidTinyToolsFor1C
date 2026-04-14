@@ -134,7 +134,11 @@ tasks.register("incrementVersion") {
     }
 }
 
-preBuild.dependsOn("incrementVersion")
+afterEvaluate {
+    tasks.named("preReleaseBuild") {
+        dependsOn("incrementVersion")
+    }
+}
 
 // Запускаем bat после сборки APK
 gradle.projectsEvaluated {

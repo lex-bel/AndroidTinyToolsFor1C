@@ -202,15 +202,18 @@ AndroidTools.Vibrate(300);
 
 ### 6. Звуковой сигнал
 
-`Beep([<КодСигнала>])`
+`Beep([<КодСигнала>], [<ДлительностьМс>])`
 
-По умолчанию используется код `28`.
-
+По умолчанию используется код `28`, длительность `200` мс.
+<Код сигнала>- Числовая константа, определяющая то, какой именно звуковой сигнал будет проигран. По умолчанию = TONE_PROP_BEEP = 24.
+Доступные значения можно посмотреть в Android SDK, у класса ToneGenerator.
+https://developer.android.com/reference/android/media/ToneGenerator
 Пример:
 
 ```bsl
 AndroidTools.Beep();
 AndroidTools.Beep(24);
+AndroidTools.Beep(24, 500);
 ```
 
 ### 7. Toast-сообщение
@@ -223,6 +226,51 @@ AndroidTools.Beep(24);
 
 ```bsl
 AndroidTools.Toast("Привет!");
+```
+
+### 8. Генерация QR-кода
+
+`GenerateQrCodeBase64(<Текст>, <Размер>)`
+
+Генерирует QR-код в формате PNG и возвращает `BASE64`-строку с двоичными данными картинки.
+
+Пример:
+
+```bsl
+Base64PNG = AndroidTools.GenerateQrCodeBase64("Текст для QR", 512);
+```
+
+### 9. HTTP-сервер
+
+`StartHttpServer([<Порт>], [<ТаймаутОтветаМс>])`
+
+Запускает встроенный HTTP-сервер. Поддерживаются входящие `POST` и `PUT` запросы.
+При получении запроса компонент генерирует внешнее событие:
+
+- Источник: `AndroidTinyTools`
+- Событие: `http_request`
+- Данные: JSON со свойствами `method`, `uri`, `path`, `query`, `data`, `body`, `remoteAddress`, `headers`
+
+`HttpServerRespond(<ТелоОтвета>)`
+
+Передает HTTP-ответ для текущего обрабатываемого запроса.
+
+`StopHttpServer()`
+
+Останавливает сервер.
+
+Пример:
+
+```bsl
+AndroidTools.StartHttpServer(8080, 30000);
+
+Процедура ВнешнееСобытие(Источник, Событие, Данные)
+    Если Источник = "AndroidTinyTools" И Событие = "http_request" Тогда
+        JSON = РазобратьJSON(Данные);
+        JSON.data = "Данные";
+        AndroidTools.HttpServerRespond(СформироватьJSON(JSON));
+    КонецЕсли;
+КонецПроцедуры
 ```
 
 ## Сборка
@@ -240,6 +288,8 @@ AndroidTools.Toast("Привет!");
 .\gradlew.bat :app:assembleDebug
 ```
 
+`assembleDebug` больше не поднимает версию компоненты.
+
 Артефакты упаковки складываются в каталог `AndroidTools`.
 
 Для release-сборки можно использовать:
@@ -249,3 +299,4 @@ AndroidTools.Toast("Привет!");
 ```
 
 После `assembleRelease` в `AndroidTools` автоматически создаётся ZIP-пакет расширения 1С вида `AndroidTinyTools_<версия>.zip`.
+Перед release-сборкой версия компоненты автоматически увеличивается на `+1`.
