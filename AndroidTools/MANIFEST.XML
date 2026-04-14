@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bundle xmlns="http://v8.1c.ru/8.2/addin/bundle" name="AndroidTinyTools_2_2_26">
+<bundle xmlns="http://v8.1c.ru/8.2/addin/bundle" name="AndroidTinyTools_2_2_28">
     <component os="Android" path="libAndroidTinyTools_ARM.so" type="native" arch="ARM" codeType="c++"/>
     <component os="Android" path="libAndroidTinyTools_ARM64.so" type="native" arch="ARM64" codeType="c++"/>
     <component os="Android" path="libAndroidTinyTools_i386.so" type="native" arch="i386" codeType="c++"/>

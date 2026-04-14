@@ -249,7 +249,10 @@ Base64PNG = AndroidTools.GenerateQrCodeBase64("Текст для QR", 512);
 
 - Источник: `AndroidTinyTools`
 - Событие: `http_request`
-- Данные: JSON со свойствами `method`, `uri`, `path`, `query`, `data`, `body`, `remoteAddress`, `headers`
+- Данные: JSON со свойствами `method`, `uri`, `path`, `query`, `data`, `body`, `remote_address`, `headers`
+
+Имена заголовков внутри `headers` приводятся к безопасному для 1С формату `snake_case`.
+Например: `User-Agent` -> `user_agent`, `Content-Type` -> `content_type`.
 
 `HttpServerRespond(<ТелоОтвета>)`
 
