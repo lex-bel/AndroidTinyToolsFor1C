@@ -43,39 +43,42 @@ public:
         eMethStartBluetoothScannerHandler = 5,
         eMethStopBluetoothScannerHandler = 6,
         eMethIsBluetoothScannerHandlerConnected = 7,
+        eMethGetDeviceId = 8,
+        eMethStartCameraBarcodeScanner = 9,
+        eMethStopCameraBarcodeScanner = 10,
         eMethLast      // Always last
     };
 
     CAddInNative(void);
-    virtual ~CAddInNative();
+    virtual ~CAddInNative() override;
     // IInitDoneBase
-    virtual bool ADDIN_API Init(void*);
-    virtual bool ADDIN_API setMemManager(void* mem);
-    virtual long ADDIN_API GetInfo();
-    virtual void ADDIN_API Done();
+    virtual bool ADDIN_API Init(void*) override;
+    virtual bool ADDIN_API setMemManager(void* mem) override;
+    virtual long ADDIN_API GetInfo() override;
+    virtual void ADDIN_API Done() override;
     // ILanguageExtenderBase
-    virtual bool ADDIN_API RegisterExtensionAs(WCHAR_T**);
-    virtual long ADDIN_API GetNProps();
-    virtual long ADDIN_API FindProp(const WCHAR_T* wsPropName);
-    virtual const WCHAR_T* ADDIN_API GetPropName(long lPropNum, long lPropAlias);
-    virtual bool ADDIN_API GetPropVal(const long lPropNum, tVariant* pvarPropVal);
-    virtual bool ADDIN_API SetPropVal(const long lPropNum, tVariant* varPropVal);
-    virtual bool ADDIN_API IsPropReadable(const long lPropNum);
-    virtual bool ADDIN_API IsPropWritable(const long lPropNum);
-    virtual long ADDIN_API GetNMethods();
-    virtual long ADDIN_API FindMethod(const WCHAR_T* wsMethodName);
+    virtual bool ADDIN_API RegisterExtensionAs(WCHAR_T**) override;
+    virtual long ADDIN_API GetNProps() override;
+    virtual long ADDIN_API FindProp(const WCHAR_T* wsPropName) override;
+    virtual const WCHAR_T* ADDIN_API GetPropName(long lPropNum, long lPropAlias) override;
+    virtual bool ADDIN_API GetPropVal(const long lPropNum, tVariant* pvarPropVal) override;
+    virtual bool ADDIN_API SetPropVal(const long lPropNum, tVariant* varPropVal) override;
+    virtual bool ADDIN_API IsPropReadable(const long lPropNum) override;
+    virtual bool ADDIN_API IsPropWritable(const long lPropNum) override;
+    virtual long ADDIN_API GetNMethods() override;
+    virtual long ADDIN_API FindMethod(const WCHAR_T* wsMethodName) override;
     virtual const WCHAR_T* ADDIN_API GetMethodName(const long lMethodNum, 
-                            const long lMethodAlias);
-    virtual long ADDIN_API GetNParams(const long lMethodNum);
+                            const long lMethodAlias) override;
+    virtual long ADDIN_API GetNParams(const long lMethodNum) override;
     virtual bool ADDIN_API GetParamDefValue(const long lMethodNum, const long lParamNum,
-                            tVariant *pvarParamDefValue);   
-    virtual bool ADDIN_API HasRetVal(const long lMethodNum);
+                            tVariant *pvarParamDefValue) override;
+    virtual bool ADDIN_API HasRetVal(const long lMethodNum) override;
     virtual bool ADDIN_API CallAsProc(const long lMethodNum,
-                    tVariant* paParams, const long lSizeArray);
+                    tVariant* paParams, const long lSizeArray) override;
     virtual bool ADDIN_API CallAsFunc(const long lMethodNum,
-                tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+                tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) override;
     // LocaleBase
-    virtual void ADDIN_API SetLocale(const WCHAR_T* loc);
+    virtual void ADDIN_API SetLocale(const WCHAR_T* loc) override;
 
     // UserLanguageBase
     virtual void ADDIN_API SetUserInterfaceLanguageCode(const WCHAR_T* lang) override;
@@ -91,6 +94,9 @@ private:
     void StartBroadcastReceiver(tVariant *paParams, const long lSizeArray);
     void StartBluetoothScannerHandler(tVariant *paParams, const long lSizeArray);
     void GetBluetoothDevicesList( tVariant* pvarRetValue, tVariant *paParams, const long lSizeArray);
+    void GetDeviceId(tVariant* pvarRetValue);
+    void StartCameraBarcodeScanner(tVariant* paParams, const long lSizeArray);
+    void StopCameraBarcodeScanner();
     void StopBroadcastReceiver();
 
     BroadcastReceiver broadcastReceiver;

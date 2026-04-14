@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bundle xmlns="http://v8.1c.ru/8.2/addin/bundle" name="AndroidTinyTools_2_2_52">
+    <component os="Android" path="libAndroidTinyTools_ARM.so" type="native" arch="ARM" codeType="c++"/>
+    <component os="Android" path="libAndroidTinyTools_ARM64.so" type="native" arch="ARM64" codeType="c++"/>
+    <component os="Android" path="libAndroidTinyTools_i386.so" type="native" arch="i386" codeType="c++"/>
+    <component os="Android" path="libAndroidTinyTools_x86_64.so" type="native" arch="x86_64" codeType="c++"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="ARM"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="ARM64"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="i386"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="x86_64"/>
+</bundle>

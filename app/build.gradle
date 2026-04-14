@@ -20,7 +20,7 @@ android {
         targetSdkVersion 34
         versionCode 1
         versionName "1.0"
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_static'
@@ -92,17 +92,42 @@ tasks.register("incrementVersion") {
         if (matcher.find()) {
             def major = matcher[0][1].toInteger()
             def minor = matcher[0][2].toInteger()
-            def patch = matcher[0][3].toInteger() + 1
+            def patch = matcher[0][3].toInteger() + 1 
 
             def newVersion = "public static final String version = \"${major}_${minor}_${patch}\";"
             content = content.replaceFirst(versionRegex, newVersion)
-            constantsFile.text = content
+            constantsFile.write(content, 'UTF-8')
             println("Version updated to: ${major}_${minor}_${patch}")
 
             // Обновление файла VerInfo.txt
-            def verInfoFile = file("${rootDir}/Package/VerInfo.txt")
-            verInfoFile.text = "${major}.${minor}.${patch}"
+            def verInfoFile = file("${rootDir}/AndroidTools/VerInfo.txt")
+            verInfoFile.write("${major}.${minor}.${patch}", 'UTF-8')
             println("VerInfo.txt updated to: ${major}.${minor}.${patch}")
+
+            def infoFile = file("${rootDir}/AndroidTools/info.xml")
+            infoFile.write("""<?xml version="1.0" encoding="UTF-8"?>
+<info>
+    <progid>AndroidTinyTools</progid>
+    <name>Набор дополнительных функций для мобильного приложения под Android</name>
+    <version>${major}.${minor}.${patch}</version>
+</info>
+""", 'UTF-8')
+            println("info.xml updated to: ${major}.${minor}.${patch}")
+
+            def manifestFile = file("${rootDir}/AndroidTools/MANIFEST.XML")
+            manifestFile.write("""<?xml version="1.0" encoding="UTF-8"?>
+<bundle xmlns="http://v8.1c.ru/8.2/addin/bundle" name="AndroidTinyTools_${major}_${minor}_${patch}">
+    <component os="Android" path="libAndroidTinyTools_ARM.so" type="native" arch="ARM" codeType="c++"/>
+    <component os="Android" path="libAndroidTinyTools_ARM64.so" type="native" arch="ARM64" codeType="c++"/>
+    <component os="Android" path="libAndroidTinyTools_i386.so" type="native" arch="i386" codeType="c++"/>
+    <component os="Android" path="libAndroidTinyTools_x86_64.so" type="native" arch="x86_64" codeType="c++"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="ARM"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="ARM64"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="i386"/>
+    <component os="Android" path="AndroidTinyTools.apk" codeType="java" type="native" arch="x86_64"/>
+</bundle>
+""", 'UTF-8')
+            println("MANIFEST.XML updated to: ${major}_${minor}_${patch}")
         } else {
             throw new GradleException("Version constant not found in Constants.java")
         }
@@ -125,25 +150,38 @@ gradle.projectsEvaluated {
             println ">>> Копируем APK для variant: ${variant}"
 
             // Путь к apk
-            def apkPath = "${rootDir}/app/${variant}/app-${variant}.apk"
+            def apkDir = file("${rootDir}/app/build/outputs/apk/${variant}")
+            def apkCandidates = [
+                    file("${apkDir}/app-${variant}.apk"),
+                    file("${apkDir}/app-${variant}-unsigned.apk")
+            ]
+            def apkFile = apkCandidates.find { it.exists() }
+            if (apkFile == null) {
+                throw new GradleException("APK file not found in ${apkDir}")
+            }
 
             // Папка назначения Package (корень проекта)
-            def packageDir = "${rootDir}/Package"
+            def packageDir = "${rootDir}/AndroidTools"
 
             // Создаём папку Package, если её ещё нет
             file(packageDir).mkdirs()
 
             // Копируем APK
             copy {
-                from apkPath
+                from apkFile
                 into packageDir
                 rename { fileName ->
                     "AndroidTinyTools.apk"   // любое имя вместо app-release.apk
                 }
             }
-            exec {
-                workingDir "${project.rootDir}/Package"
-                commandLine "cmd", "/c", "MakePackage.bat"
+            def makePackageBat = file("${rootDir}/AndroidTools/MakePackage.bat")
+            if (makePackageBat.exists()) {
+                exec {
+                    workingDir "${project.rootDir}/AndroidTools"
+                    commandLine "cmd", "/c", "MakePackage.bat"
+                }
+            } else {
+                println ">>> MakePackage.bat не найден, пропускаем упаковку."
             }
         }
     }
@@ -169,4 +207,5 @@ dependencies {
     androidTestImplementation("androidx.test:rules:1.6.1")
 
     implementation 'androidx.annotation:annotation:1.7.1'
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 }

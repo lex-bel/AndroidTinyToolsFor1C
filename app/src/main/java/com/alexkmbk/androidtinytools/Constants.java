@@ -8,8 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Constants {
-    public static final String version = "2_2_22";
+    public static final String version = "2_2_52";
     public static final int REQUEST_BLUETOOTH_CONNECT_PERMISSION = 100;
+    public static final int REQUEST_CAMERA_PERMISSION = 101;
 
     // Метод, возвращающий актуальные Bluetooth-разрешения для текущей версии Android
     public static String[] getBluetoothPermissions() {

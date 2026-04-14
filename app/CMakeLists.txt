@@ -40,7 +40,7 @@ else()
     set_target_properties(AndroidTinyTools PROPERTIES SUFFIX "_i386.so")
 endif()
 
-set_target_properties(AndroidTinyTools PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}../../Package)
+set_target_properties(AndroidTinyTools PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../AndroidTools)
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
@@ -55,7 +55,7 @@ find_library( # Sets the name of the path variable.
               # you want CMake to locate.
              log )
 
-set(PACKAGE_DIR ${PROJECT_ROOT}/Package)
+set(PACKAGE_DIR ${PROJECT_SOURCE_DIR}/../AndroidTools)
 
 # Копировать собранную so в указанную папку
 add_custom_command(TARGET AndroidTinyTools

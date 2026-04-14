@@ -6,7 +6,19 @@
 
 static const std::u16string sClassName(u"AndroidTinyTools");
 
-static const std::array<std::u16string, CAddInNative::eMethLast> osMethods{ u"vibrate", u"beep", u"toast", u"startbroadcastreceiver", u"getbluetoothdeviceslist", u"startbluetoothscannerhandler", u"stopbluetoothscannerhandler", u"isbluetoothscannerhandlerconnected"};
+static const std::array<std::u16string, CAddInNative::eMethLast> osMethods{
+        u"vibrate",
+        u"beep",
+        u"toast",
+        u"startbroadcastreceiver",
+        u"getbluetoothdeviceslist",
+        u"startbluetoothscannerhandler",
+        u"stopbluetoothscannerhandler",
+        u"isbluetoothscannerhandlerconnected",
+        u"getdeviceid",
+        u"startcamerabarcodescanner",
+        u"stopcamerabarcodescanner"
+};
 
 AppCapabilities g_capabilities = eAppCapabilitiesInvalid;
 
@@ -194,6 +206,8 @@ long CAddInNative::GetNParams(const long lMethodNum)
             return 2;
         case eMethStartBluetoothScannerHandler:
             return 1;
+        case eMethStartCameraBarcodeScanner:
+            return 5;
         default:
             return 0;
     }
@@ -219,6 +233,36 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
             pvarParamDefValue->lVal = 28;
             return true;
         }
+        case eMethStartCameraBarcodeScanner:
+        {
+            if (lParamNum == 0) {
+                TV_VT(pvarParamDefValue) = VTYPE_BOOL;
+                pvarParamDefValue->bVal = false;
+                return true;
+            }
+            if (lParamNum == 1) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 0;
+                return true;
+            }
+            if (lParamNum == 2) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 0;
+                return true;
+            }
+            if (lParamNum == 3) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 0;
+                return true;
+            }
+            if (lParamNum == 4) {
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 0;
+                return true;
+            }
+            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+            return false;
+        }
         default:
         {
             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
@@ -239,6 +283,10 @@ bool CAddInNative::HasRetVal(const long lMethodNum)
              return true;
         }
         case eMethIsBluetoothScannerHandlerConnected:
+        {
+            return true;
+        }
+        case eMethGetDeviceId:
         {
             return true;
         }
@@ -284,6 +332,16 @@ bool CAddInNative::CallAsProc(const long lMethodNum,
             StartBluetoothScannerHandler(paParams, lSizeArray);
             return true;
         }
+        case eMethStartCameraBarcodeScanner:
+        {
+            StartCameraBarcodeScanner(paParams, lSizeArray);
+            return true;
+        }
+        case eMethStopCameraBarcodeScanner:
+        {
+            StopCameraBarcodeScanner();
+            return true;
+        }
         default:
             return false;
     }
@@ -304,6 +362,11 @@ bool CAddInNative::CallAsFunc(const long lMethodNum,
         case eMethIsBluetoothScannerHandlerConnected:
         {
             bluetoothBarcodeScannerHandler.IsConnected(pvarRetValue);
+            return true;
+        }
+        case eMethGetDeviceId:
+        {
+            GetDeviceId(pvarRetValue);
             return true;
         }
         default:
@@ -531,6 +594,174 @@ void CAddInNative::StartBluetoothScannerHandler(tVariant *paParams, const long l
 
 }
 
+void CAddInNative::GetDeviceId(tVariant* pvarRetValue) {
+
+    TV_VT(pvarRetValue) = VTYPE_PWSTR;
+    pvarRetValue->wstrLen = 0;
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/DeviceIdClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jenv->DeleteLocalRef(activity);
+
+            jstring res = (jstring)jenv->CallObjectMethod(obj, jenv->GetMethodID(cc, "getDeviceId", "()Ljava/lang/String;"));
+            if (res != nullptr)
+            {
+                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
+                jenv->DeleteLocalRef(res);
+            }
+
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::StartCameraBarcodeScanner(tVariant* paParams, const long lSizeArray) {
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/CameraBarcodeScannerClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;J)V");
+            jboolean enableTorch = JNI_FALSE;
+            jint scanMode = 0;
+            jint framingWidthPercent = 0;
+            jint framingHeightPercent = 0;
+            jint digitalZoomPercent = 0;
+
+            if (lSizeArray > 0) {
+                if (TV_VT(&paParams[0]) == VTYPE_BOOL) {
+                    enableTorch = paParams[0].bVal ? JNI_TRUE : JNI_FALSE;
+                } else if (TV_VT(&paParams[0]) == VTYPE_I4) {
+                    enableTorch = paParams[0].lVal != 0 ? JNI_TRUE : JNI_FALSE;
+                }
+            }
+
+            if (lSizeArray > 1 && TV_VT(&paParams[1]) == VTYPE_I4) {
+                scanMode = (jint)paParams[1].lVal;
+            }
+            if (lSizeArray > 2 && TV_VT(&paParams[2]) == VTYPE_I4) {
+                framingWidthPercent = (jint)paParams[2].lVal;
+            }
+            if (lSizeArray > 3 && TV_VT(&paParams[3]) == VTYPE_I4) {
+                framingHeightPercent = (jint)paParams[3].lVal;
+            }
+            if (lSizeArray > 4 && TV_VT(&paParams[4]) == VTYPE_I4) {
+                digitalZoomPercent = (jint)paParams[4].lVal;
+            }
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity, (jlong)this);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+            jenv->DeleteLocalRef(activity);
+
+            jenv->CallVoidMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "startScan", "(ZIIII)V"),
+                    enableTorch,
+                    scanMode,
+                    framingWidthPercent,
+                    framingHeightPercent,
+                    digitalZoomPercent
+            );
+
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::StopCameraBarcodeScanner() {
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/CameraBarcodeScannerClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;J)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity, (jlong)this);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+                jenv->CallVoidMethod(obj, jenv->GetMethodID(cc, "stopScan", "()V"));
+                jenv->DeleteGlobalRef(obj);
+            }
+
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
 static const char16_t g_EventSource[] = u"AndroidTinyTools";
 static const char16_t g_OnBarcodeEventName[] = u"Barcode";
 
@@ -569,6 +800,23 @@ extern "C" JNIEXPORT void JNICALL Java_com_alexkmbk_androidtinytools_BluetoothBa
             bluetoothBarcodeScannerHandler->m_iConnect->ExternalEvent((WCHAR_T*) g_EventSource,
                                                                       (WCHAR_T*) g_OnBarcodeEventName,
                                                                       wcBarcode);
+        }
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_alexkmbk_androidtinytools_CameraBarcodeScannerClass_OnBarcode(JNIEnv* jenv, jclass jClass, jlong pObject, jstring sBarcode)
+{
+    CAddInNative *addInNative = (CAddInNative *) pObject;
+
+    if (addInNative) {
+
+        WCHAR_T *wcBarcode = nullptr;
+        jstring2v8string(jenv, addInNative->m_iMemory, sBarcode, &wcBarcode);
+
+        if (addInNative->m_iConnect != NULL) {
+            addInNative->m_iConnect->ExternalEvent((WCHAR_T*) g_EventSource,
+                                                   (WCHAR_T*) g_OnBarcodeEventName,
+                                                   wcBarcode);
         }
     }
 }

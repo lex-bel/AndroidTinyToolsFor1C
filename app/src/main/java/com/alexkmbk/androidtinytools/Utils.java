@@ -10,6 +10,18 @@ import android.content.pm.PackageManager;
 import java.util.ArrayList;
 
 public class Utils {
+    public static boolean checkCameraPermission(Activity mContext) {
+        if (mContext.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            return true;
+        }
+
+        mContext.requestPermissions(
+                new String[]{Manifest.permission.CAMERA},
+                Constants.REQUEST_CAMERA_PERMISSION
+        );
+        return false;
+    }
+
     public static boolean checkBluetoothPermissions(Activity mContext) {
         ArrayList<String> notGrantedPermissions = new ArrayList<>();
 
