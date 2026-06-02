@@ -50,6 +50,8 @@ public:
         eMethStartHttpServer = 12,
         eMethStopHttpServer = 13,
         eMethHttpServerRespond = 14,
+        eMethVerifyRsaPssSha256Signature = 15,
+        eMethGetDeviceInfo = 16,
         eMethLast      // Always last
     };
 
@@ -105,6 +107,8 @@ private:
     void StartHttpServer(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
     void StopHttpServer();
     void HttpServerRespond(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+    void VerifyRsaPssSha256Signature(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+    void GetDeviceInfo(tVariant* pvarRetValue);
     void StopBroadcastReceiver();
 
     BroadcastReceiver broadcastReceiver;

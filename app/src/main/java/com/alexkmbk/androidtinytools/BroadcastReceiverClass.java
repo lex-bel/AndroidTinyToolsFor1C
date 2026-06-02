@@ -11,6 +11,7 @@ import android.os.Build;
 
 @Keep
 public class BroadcastReceiverClass implements Runnable{
+    private static final String BARCODE_EVENT_NAME = "Barcode";
     private Activity mContext; // activity of 1C:Enterprise
     private BroadcastReceiver mReceiver;
     private long mV8Object; // 1C application context
@@ -56,9 +57,9 @@ public class BroadcastReceiverClass implements Runnable{
                     public void onReceive(Context context, Intent intent) {
                         if (intent.getAction().equals(mActionName)){
                             if (mExtraParamName.isEmpty())
-                                BroadcastMessage(mV8Object, mActionName, null);
+                                BroadcastMessage(mV8Object, BARCODE_EVENT_NAME, null);
                             else {
-                                 BroadcastMessage(mV8Object, mActionName, intent.getStringExtra(mExtraParamName));
+                                 BroadcastMessage(mV8Object, BARCODE_EVENT_NAME, intent.getStringExtra(mExtraParamName));
                             }
                         }
                     }

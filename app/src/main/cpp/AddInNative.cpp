@@ -21,7 +21,9 @@ static const std::array<std::u16string, CAddInNative::eMethLast> osMethods{
         u"generateqrcodebase64",
         u"starthttpserver",
         u"stophttpserver",
-        u"httpserverrespond"
+        u"httpserverrespond",
+        u"verifyrsapsssha256signature",
+        u"getdeviceinfo"
 };
 
 AppCapabilities g_capabilities = eAppCapabilitiesInvalid;
@@ -219,6 +221,8 @@ long CAddInNative::GetNParams(const long lMethodNum)
             return 2;
         case eMethHttpServerRespond:
             return 1;
+        case eMethVerifyRsaPssSha256Signature:
+            return 3;
         default:
             return 0;
     }
@@ -337,6 +341,14 @@ bool CAddInNative::HasRetVal(const long lMethodNum)
         {
             return true;
         }
+        case eMethVerifyRsaPssSha256Signature:
+        {
+            return true;
+        }
+        case eMethGetDeviceInfo:
+        {
+            return true;
+        }
         default:
             return false;
     }
@@ -434,6 +446,16 @@ bool CAddInNative::CallAsFunc(const long lMethodNum,
         case eMethHttpServerRespond:
         {
             HttpServerRespond(pvarRetValue, paParams, lSizeArray);
+            return true;
+        }
+        case eMethVerifyRsaPssSha256Signature:
+        {
+            VerifyRsaPssSha256Signature(pvarRetValue, paParams, lSizeArray);
+            return true;
+        }
+        case eMethGetDeviceInfo:
+        {
+            GetDeviceInfo(pvarRetValue);
             return true;
         }
         default:
@@ -1053,6 +1075,128 @@ void CAddInNative::HttpServerRespond(tVariant* pvarRetValue, tVariant* paParams,
 
             jenv->DeleteLocalRef(response);
             jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::VerifyRsaPssSha256Signature(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
+
+    TV_VT(pvarRetValue) = VTYPE_BOOL;
+    pvarRetValue->bVal = false;
+
+    if (lSizeArray < 3 ||
+        TV_VT(&paParams[0]) != VTYPE_PWSTR ||
+        TV_VT(&paParams[1]) != VTYPE_PWSTR ||
+        TV_VT(&paParams[2]) != VTYPE_PWSTR) {
+        return;
+    }
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/SignatureVerifierClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jstring publicKeyPem = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
+            jstring message = jenv->NewString(reinterpret_cast<const jchar *>(paParams[1].pwstrVal), paParams[1].wstrLen);
+            jstring signatureBase64 = jenv->NewString(reinterpret_cast<const jchar *>(paParams[2].pwstrVal), paParams[2].wstrLen);
+
+            jboolean verified = jenv->CallBooleanMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "verifyRsaPssSha256Signature", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z"),
+                    publicKeyPem,
+                    message,
+                    signatureBase64
+            );
+
+            pvarRetValue->bVal = (verified == JNI_TRUE);
+
+            jenv->DeleteLocalRef(publicKeyPem);
+            jenv->DeleteLocalRef(message);
+            jenv->DeleteLocalRef(signatureBase64);
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::GetDeviceInfo(tVariant* pvarRetValue) {
+
+    TV_VT(pvarRetValue) = VTYPE_PWSTR;
+    pvarRetValue->wstrLen = 0;
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/DeviceInfoClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jenv->DeleteLocalRef(activity);
+
+            jstring res = (jstring)jenv->CallObjectMethod(obj, jenv->GetMethodID(cc, "getDeviceInfo", "()Ljava/lang/String;"));
+            if (res != nullptr)
+            {
+                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
+                jenv->DeleteLocalRef(res);
+            }
+
             jenv->DeleteGlobalRef(obj);
             jenv->DeleteGlobalRef(cc);
         }
