@@ -1,0 +1,2 @@
+// Use this to skip NDK license check
+org.gradle.java.home = System.getenv("JAVA_HOME")

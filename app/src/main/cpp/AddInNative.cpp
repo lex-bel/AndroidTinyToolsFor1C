@@ -214,7 +214,7 @@ long CAddInNative::GetNParams(const long lMethodNum)
         case eMethStartBluetoothScannerHandler:
             return 1;
         case eMethStartCameraBarcodeScanner:
-            return 5;
+            return 3; // enableTorch, scanMode, hintText (область задаётся интерактивно)
         case eMethGenerateQrCodeBase64:
             return 2;
         case eMethStartHttpServer:
@@ -260,28 +260,30 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
         case eMethStartCameraBarcodeScanner:
         {
             if (lParamNum == 0) {
+                // enableTorch — фонарик выключен по умолчанию
                 TV_VT(pvarParamDefValue) = VTYPE_BOOL;
                 pvarParamDefValue->bVal = false;
                 return true;
             }
             if (lParamNum == 1) {
+                // scanMode — универсальный режим по умолчанию
                 TV_VT(pvarParamDefValue) = VTYPE_I4;
                 pvarParamDefValue->lVal = 0;
                 return true;
             }
             if (lParamNum == 2) {
-                TV_VT(pvarParamDefValue) = VTYPE_I4;
-                pvarParamDefValue->lVal = 0;
-                return true;
-            }
-            if (lParamNum == 3) {
-                TV_VT(pvarParamDefValue) = VTYPE_I4;
-                pvarParamDefValue->lVal = 0;
-                return true;
-            }
-            if (lParamNum == 4) {
-                TV_VT(pvarParamDefValue) = VTYPE_I4;
-                pvarParamDefValue->lVal = 0;
+                // hintText — пустая строка по умолчанию.
+                // Используем VTYPE_PWSTR с wstrLen=0, а не VTYPE_EMPTY,
+                // иначе платформа 1С может считать параметр обязательным.
+                char16_t* emptyStr = nullptr;
+                if (m_iMemory && m_iMemory->AllocMemory(reinterpret_cast<void**>(&emptyStr), sizeof(char16_t))) {
+                    emptyStr[0] = 0;
+                    TV_VT(pvarParamDefValue) = VTYPE_PWSTR;
+                    pvarParamDefValue->pwstrVal = emptyStr;
+                    pvarParamDefValue->wstrLen = 0;
+                    return true;
+                }
+                TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
                 return true;
             }
             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
@@ -765,12 +767,9 @@ void CAddInNative::StartCameraBarcodeScanner(tVariant* paParams, const long lSiz
             jenv->DeleteLocalRef(ccloc);
             jobject activity = helper->GetActivity();
             jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;J)V");
-            jboolean enableTorch = JNI_FALSE;
-            jint scanMode = 0;
-            jint framingWidthPercent = 0;
-            jint framingHeightPercent = 0;
-            jint digitalZoomPercent = 0;
 
+            // Параметр 0: enableTorch
+            jboolean enableTorch = JNI_FALSE;
             if (lSizeArray > 0) {
                 if (TV_VT(&paParams[0]) == VTYPE_BOOL) {
                     enableTorch = paParams[0].bVal ? JNI_TRUE : JNI_FALSE;
@@ -779,17 +778,17 @@ void CAddInNative::StartCameraBarcodeScanner(tVariant* paParams, const long lSiz
                 }
             }
 
+            // Параметр 1: scanMode
+            jint scanMode = 0;
             if (lSizeArray > 1 && TV_VT(&paParams[1]) == VTYPE_I4) {
                 scanMode = (jint)paParams[1].lVal;
             }
-            if (lSizeArray > 2 && TV_VT(&paParams[2]) == VTYPE_I4) {
-                framingWidthPercent = (jint)paParams[2].lVal;
-            }
-            if (lSizeArray > 3 && TV_VT(&paParams[3]) == VTYPE_I4) {
-                framingHeightPercent = (jint)paParams[3].lVal;
-            }
-            if (lSizeArray > 4 && TV_VT(&paParams[4]) == VTYPE_I4) {
-                digitalZoomPercent = (jint)paParams[4].lVal;
+
+            // Параметр 2: hintText — текст подсказки (необязателен)
+            jstring hintText = jenv->NewStringUTF("");
+            if (lSizeArray > 2 && TV_VT(&paParams[2]) == VTYPE_PWSTR && paParams[2].wstrLen > 0) {
+                jenv->DeleteLocalRef(hintText);
+                hintText = jenv->NewString(reinterpret_cast<const jchar*>(paParams[2].pwstrVal), paParams[2].wstrLen);
             }
 
             jobject objloc = jenv->NewObject(cc, ctorID, activity, (jlong)this);
@@ -800,6 +799,7 @@ void CAddInNative::StartCameraBarcodeScanner(tVariant* paParams, const long lSiz
             }
             else
             {
+                jenv->DeleteLocalRef(hintText);
                 jenv->DeleteLocalRef(activity);
                 jenv->DeleteGlobalRef(cc);
                 return;
@@ -808,13 +808,12 @@ void CAddInNative::StartCameraBarcodeScanner(tVariant* paParams, const long lSiz
 
             jenv->CallVoidMethod(
                     obj,
-                    jenv->GetMethodID(cc, "startScan", "(ZIIII)V"),
+                    jenv->GetMethodID(cc, "startScan", "(ZILjava/lang/String;)V"),
                     enableTorch,
                     scanMode,
-                    framingWidthPercent,
-                    framingHeightPercent,
-                    digitalZoomPercent
+                    hintText
             );
+            jenv->DeleteLocalRef(hintText);
 
             jenv->DeleteGlobalRef(obj);
             jenv->DeleteGlobalRef(cc);
@@ -1204,7 +1203,8 @@ void CAddInNative::GetDeviceInfo(tVariant* pvarRetValue) {
 }
 
 static const char16_t g_EventSource[] = u"AndroidTinyTools";
-static const char16_t g_OnBarcodeEventName[] = u"Barcode";
+static const char16_t g_OnBarcodeEventName[] = u"Barcode";         // Bluetooth-сканер
+static const char16_t g_OnCameraBarcodeEventName[] = u"CameraBarcode"; // Камера устройства
 static const char16_t g_OnHttpRequestEventName[] = u"http_request";
 
 extern "C" JNIEXPORT void JNICALL Java_com_alexkmbk_androidtinytools_BroadcastReceiverClass_BroadcastMessage(JNIEnv* jenv, jclass jClass, jlong pObject, jstring jsEventName, jstring jsExtraParam)
@@ -1257,7 +1257,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_alexkmbk_androidtinytools_CameraBarco
 
         if (addInNative->m_iConnect != NULL) {
             addInNative->m_iConnect->ExternalEvent((WCHAR_T*) g_EventSource,
-                                                   (WCHAR_T*) g_OnBarcodeEventName,
+                                                   (WCHAR_T*) g_OnCameraBarcodeEventName,
                                                    wcBarcode);
         }
     }

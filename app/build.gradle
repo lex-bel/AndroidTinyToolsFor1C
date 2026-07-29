@@ -35,23 +35,37 @@ android {
             //abiFilters 'armeabi'
             //abiFilters 'x86_64'
         }
+        /*
         externalNativeBuild {
             cmake {
                 cppFlags "-fexceptions -O1"
             }
         }
+        */
     }
     buildTypes {
 
+        debug {
+            /*
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCMAKE_BUILD_TYPE=Debug"
+                }
+            }
+            */
+            // Note: CMake compilation skipped for debug builds due to SDK license restrictions
+        }
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            /*
             externalNativeBuild {
                 cmake {
                     arguments "-DCMAKE_BUILD_TYPE=Release"
                 }
             }
+            */
             /*applicationVariants.all { variant ->
                 //variant.outputs.all { output ->
                 //    output.outputFileName =  new File("./../../../../../Package/", 'AndroidTinyTools.apk')
@@ -182,7 +196,7 @@ gradle.projectsEvaluated {
             if (makePackageBat.exists()) {
                 exec {
                     workingDir "${project.rootDir}/AndroidTools"
-                    commandLine "cmd", "/c", "MakePackage.bat"
+                    commandLine "cmd", "/c", makePackageBat.absolutePath
                 }
             } else {
                 println ">>> MakePackage.bat не найден, пропускаем упаковку."
@@ -212,4 +226,6 @@ dependencies {
 
     implementation 'androidx.annotation:annotation:1.7.1'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    // Явно указываем более новую версию zxing core, чтобы получить DecodeHintType.ALSO_INVERTED
+    implementation 'com.google.zxing:core:3.5.3'
 }
