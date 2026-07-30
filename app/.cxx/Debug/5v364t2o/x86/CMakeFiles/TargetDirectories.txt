@@ -1,0 +1,3 @@
+C:/prog/AndroidTinyToolsFor1C/app/.cxx/Debug/5v364t2o/x86/CMakeFiles/AndroidTinyTools.dir
+C:/prog/AndroidTinyToolsFor1C/app/.cxx/Debug/5v364t2o/x86/CMakeFiles/edit_cache.dir
+C:/prog/AndroidTinyToolsFor1C/app/.cxx/Debug/5v364t2o/x86/CMakeFiles/rebuild_cache.dir

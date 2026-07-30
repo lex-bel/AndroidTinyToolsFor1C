@@ -1,0 +1,1 @@
+C:\prog\AndroidTinyToolsFor1C\app\CMakeLists.txt

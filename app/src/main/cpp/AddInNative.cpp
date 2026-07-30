@@ -23,7 +23,12 @@ static const std::array<std::u16string, CAddInNative::eMethLast> osMethods{
         u"stophttpserver",
         u"httpserverrespond",
         u"verifyrsapsssha256signature",
-        u"getdeviceinfo"
+        u"getdeviceinfo",
+        u"printerconnect",
+        u"printerprint",
+        u"printerdisconnect",
+        u"printergetstatus",
+        u"printerisconnected"
 };
 
 AppCapabilities g_capabilities = eAppCapabilitiesInvalid;
@@ -89,6 +94,7 @@ long CAddInNative::GetInfo()
 void CAddInNative::Done()
 {
     StopHttpServer();
+    PrinterDisconnect();
     m_iConnect = NULL;
 }
 /////////////////////////////////////////////////////////////////////////////
@@ -223,6 +229,12 @@ long CAddInNative::GetNParams(const long lMethodNum)
             return 1;
         case eMethVerifyRsaPssSha256Signature:
             return 3;
+        case eMethPrinterConnect:
+            return 4; // addressType, address, port, timeoutMs
+        case eMethPrinterPrint:
+            return 3; // language, data, encoding
+        case eMethPrinterGetStatus:
+            return 1; // language
         default:
             return 0;
     }
@@ -304,6 +316,63 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
             return false;
         }
+        case eMethPrinterConnect:
+        {
+            if (lParamNum == 2) {
+                // port — стандартный порт RAW-печати
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 9100;
+                return true;
+            }
+            if (lParamNum == 3) {
+                // timeoutMs
+                TV_VT(pvarParamDefValue) = VTYPE_I4;
+                pvarParamDefValue->lVal = 5000;
+                return true;
+            }
+            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+            return false;
+        }
+        case eMethPrinterPrint:
+        {
+            if (lParamNum == 2) {
+                // encoding — по умолчанию UTF-8.
+                // Используем VTYPE_PWSTR, а не VTYPE_EMPTY,
+                // иначе платформа 1С может считать параметр обязательным.
+                static const char16_t defEncoding[] = u"UTF-8";
+                const size_t len = (sizeof(defEncoding) / sizeof(char16_t)) - 1;
+                char16_t* str = nullptr;
+                if (m_iMemory && m_iMemory->AllocMemory(reinterpret_cast<void**>(&str), sizeof(defEncoding))) {
+                    memcpy(str, defEncoding, sizeof(defEncoding));
+                    TV_VT(pvarParamDefValue) = VTYPE_PWSTR;
+                    pvarParamDefValue->pwstrVal = str;
+                    pvarParamDefValue->wstrLen = len;
+                    return true;
+                }
+                TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+                return true;
+            }
+            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+            return false;
+        }
+        case eMethPrinterGetStatus:
+        {
+            if (lParamNum == 0) {
+                // language — пустая строка: вернуть только состояние подключения
+                char16_t* emptyStr = nullptr;
+                if (m_iMemory && m_iMemory->AllocMemory(reinterpret_cast<void**>(&emptyStr), sizeof(char16_t))) {
+                    emptyStr[0] = 0;
+                    TV_VT(pvarParamDefValue) = VTYPE_PWSTR;
+                    pvarParamDefValue->pwstrVal = emptyStr;
+                    pvarParamDefValue->wstrLen = 0;
+                    return true;
+                }
+                TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+                return true;
+            }
+            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+            return false;
+        }
         default:
         {
             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
@@ -348,6 +417,22 @@ bool CAddInNative::HasRetVal(const long lMethodNum)
             return true;
         }
         case eMethGetDeviceInfo:
+        {
+            return true;
+        }
+        case eMethPrinterConnect:
+        {
+            return true;
+        }
+        case eMethPrinterPrint:
+        {
+            return true;
+        }
+        case eMethPrinterGetStatus:
+        {
+            return true;
+        }
+        case eMethPrinterIsConnected:
         {
             return true;
         }
@@ -408,6 +493,11 @@ bool CAddInNative::CallAsProc(const long lMethodNum,
             StopHttpServer();
             return true;
         }
+        case eMethPrinterDisconnect:
+        {
+            PrinterDisconnect();
+            return true;
+        }
         default:
             return false;
     }
@@ -458,6 +548,26 @@ bool CAddInNative::CallAsFunc(const long lMethodNum,
         case eMethGetDeviceInfo:
         {
             GetDeviceInfo(pvarRetValue);
+            return true;
+        }
+        case eMethPrinterConnect:
+        {
+            PrinterConnect(pvarRetValue, paParams, lSizeArray);
+            return true;
+        }
+        case eMethPrinterPrint:
+        {
+            PrinterPrint(pvarRetValue, paParams, lSizeArray);
+            return true;
+        }
+        case eMethPrinterGetStatus:
+        {
+            PrinterGetStatus(pvarRetValue, paParams, lSizeArray);
+            return true;
+        }
+        case eMethPrinterIsConnected:
+        {
+            PrinterIsConnected(pvarRetValue);
             return true;
         }
         default:
@@ -1196,6 +1306,309 @@ void CAddInNative::GetDeviceInfo(tVariant* pvarRetValue) {
                 jenv->DeleteLocalRef(res);
             }
 
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::PrinterConnect(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
+
+    TV_VT(pvarRetValue) = VTYPE_PWSTR;
+    pvarRetValue->wstrLen = 0;
+
+    if (lSizeArray < 2 || TV_VT(&paParams[0]) != VTYPE_PWSTR || TV_VT(&paParams[1]) != VTYPE_PWSTR) {
+        return;
+    }
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jint port = 9100;
+            jint timeoutMs = 5000;
+            if (lSizeArray > 2 && TV_VT(&paParams[2]) == VTYPE_I4) {
+                port = (jint)paParams[2].lVal;
+            }
+            if (lSizeArray > 3 && TV_VT(&paParams[3]) == VTYPE_I4) {
+                timeoutMs = (jint)paParams[3].lVal;
+            }
+
+            jstring addressType = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
+            jstring address = jenv->NewString(reinterpret_cast<const jchar *>(paParams[1].pwstrVal), paParams[1].wstrLen);
+
+            jstring res = (jstring)jenv->CallObjectMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "connect", "(Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;"),
+                    addressType,
+                    address,
+                    port,
+                    timeoutMs
+            );
+
+            if (res != nullptr)
+            {
+                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
+                jenv->DeleteLocalRef(res);
+            }
+
+            jenv->DeleteLocalRef(addressType);
+            jenv->DeleteLocalRef(address);
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::PrinterPrint(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
+
+    TV_VT(pvarRetValue) = VTYPE_PWSTR;
+    pvarRetValue->wstrLen = 0;
+
+    if (lSizeArray < 2 || TV_VT(&paParams[0]) != VTYPE_PWSTR || TV_VT(&paParams[1]) != VTYPE_PWSTR) {
+        return;
+    }
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jstring language = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
+            jstring data = jenv->NewString(reinterpret_cast<const jchar *>(paParams[1].pwstrVal), paParams[1].wstrLen);
+
+            jstring encoding;
+            if (lSizeArray > 2 && TV_VT(&paParams[2]) == VTYPE_PWSTR && paParams[2].wstrLen > 0) {
+                encoding = jenv->NewString(reinterpret_cast<const jchar *>(paParams[2].pwstrVal), paParams[2].wstrLen);
+            } else {
+                encoding = jenv->NewStringUTF("UTF-8");
+            }
+
+            jstring res = (jstring)jenv->CallObjectMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "print", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
+                    language,
+                    data,
+                    encoding
+            );
+
+            if (res != nullptr)
+            {
+                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
+                jenv->DeleteLocalRef(res);
+            }
+
+            jenv->DeleteLocalRef(language);
+            jenv->DeleteLocalRef(data);
+            jenv->DeleteLocalRef(encoding);
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::PrinterDisconnect() {
+
+    IAddInDefBaseEx* cnn = m_iConnect;
+    if (cnn == nullptr) {
+        return;
+    }
+
+    IAndroidComponentHelper* helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            jclass cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                jobject obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+                jenv->CallVoidMethod(obj, jenv->GetMethodID(cc, "disconnect", "()V"));
+                jenv->DeleteGlobalRef(obj);
+            }
+
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::PrinterGetStatus(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
+
+    TV_VT(pvarRetValue) = VTYPE_PWSTR;
+    pvarRetValue->wstrLen = 0;
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jstring language;
+            if (lSizeArray > 0 && TV_VT(&paParams[0]) == VTYPE_PWSTR && paParams[0].wstrLen > 0) {
+                language = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
+            } else {
+                language = jenv->NewStringUTF("");
+            }
+
+            jstring res = (jstring)jenv->CallObjectMethod(
+                    obj,
+                    jenv->GetMethodID(cc, "getStatus", "(Ljava/lang/String;)Ljava/lang/String;"),
+                    language
+            );
+
+            if (res != nullptr)
+            {
+                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
+                jenv->DeleteLocalRef(res);
+            }
+
+            jenv->DeleteLocalRef(language);
+            jenv->DeleteLocalRef(activity);
+            jenv->DeleteGlobalRef(obj);
+            jenv->DeleteGlobalRef(cc);
+        }
+    }
+}
+
+void CAddInNative::PrinterIsConnected(tVariant* pvarRetValue) {
+
+    TV_VT(pvarRetValue) = VTYPE_BOOL;
+    pvarRetValue->bVal = false;
+
+    IAndroidComponentHelper* helper;
+    jclass cc;
+    jobject obj;
+    IAddInDefBaseEx* cnn;
+
+    cnn = m_iConnect;
+    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
+
+    if (helper)
+    {
+        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
+
+        if (ccloc)
+        {
+            JNIEnv* jenv = getJniEnv();
+            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
+            jenv->DeleteLocalRef(ccloc);
+            jobject activity = helper->GetActivity();
+            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
+
+            jobject objloc = jenv->NewObject(cc, ctorID, activity);
+            if (objloc)
+            {
+                obj = jenv->NewGlobalRef(objloc);
+                jenv->DeleteLocalRef(objloc);
+            }
+            else
+            {
+                jenv->DeleteLocalRef(activity);
+                jenv->DeleteGlobalRef(cc);
+                return;
+            }
+
+            jboolean connected = jenv->CallBooleanMethod(obj, jenv->GetMethodID(cc, "isConnected", "()Z"));
+            pvarRetValue->bVal = (connected == JNI_TRUE);
+
+            jenv->DeleteLocalRef(activity);
             jenv->DeleteGlobalRef(obj);
             jenv->DeleteGlobalRef(cc);
         }

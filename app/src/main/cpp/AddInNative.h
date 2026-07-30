@@ -52,6 +52,11 @@ public:
         eMethHttpServerRespond = 14,
         eMethVerifyRsaPssSha256Signature = 15,
         eMethGetDeviceInfo = 16,
+        eMethPrinterConnect = 17,
+        eMethPrinterPrint = 18,
+        eMethPrinterDisconnect = 19,
+        eMethPrinterGetStatus = 20,
+        eMethPrinterIsConnected = 21,
         eMethLast      // Always last
     };
 
@@ -109,6 +114,11 @@ private:
     void HttpServerRespond(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
     void VerifyRsaPssSha256Signature(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
     void GetDeviceInfo(tVariant* pvarRetValue);
+    void PrinterConnect(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+    void PrinterPrint(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+    void PrinterDisconnect();
+    void PrinterGetStatus(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+    void PrinterIsConnected(tVariant* pvarRetValue);
     void StopBroadcastReceiver();
 
     BroadcastReceiver broadcastReceiver;

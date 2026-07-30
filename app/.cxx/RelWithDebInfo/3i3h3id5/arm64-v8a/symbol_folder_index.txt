@@ -1,0 +1,1 @@
+C:\prog\AndroidTinyToolsFor1C\app\build\intermediates\cxx\RelWithDebInfo\3i3h3id5\obj\arm64-v8a

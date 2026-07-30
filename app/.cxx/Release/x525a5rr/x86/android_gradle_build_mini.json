@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "C:\\prog\\AndroidTinyToolsFor1C\\app\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Users\\00BelousovAP\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "C:\\prog\\AndroidTinyToolsFor1C\\app\\.cxx\\Release\\x525a5rr\\x86",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Users\\00BelousovAP\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "C:\\prog\\AndroidTinyToolsFor1C\\app\\.cxx\\Release\\x525a5rr\\x86",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "AndroidTinyTools::@6890427a1f51a3e7e1df": {
+      "artifactName": "AndroidTinyTools",
+      "abi": "x86",
+      "output": "C:\\prog\\AndroidTinyToolsFor1C\\AndroidTools\\libAndroidTinyTools_i386.so",
+      "runtimeFiles": []
+    }
+  }
+}

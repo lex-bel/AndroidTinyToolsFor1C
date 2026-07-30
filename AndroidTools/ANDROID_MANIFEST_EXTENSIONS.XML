@@ -4,6 +4,16 @@
     <target xpath="/manifest" >
         <uses-permission android:name="android.permission.VIBRATE"/>
         <uses-permission android:name="android.permission.CAMERA"/>
+        <uses-permission android:name="android.permission.INTERNET"/>
+        <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+        <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+        <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+        <!-- Android 12+ (API 31+) -->
+        <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+        <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
+        <!-- До Android 12 работа с Bluetooth требует разрешения на местоположение -->
+        <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
         <uses-feature
             android:name="android.hardware.camera"
             android:required="false"/>

@@ -1,0 +1,27 @@
+[
+{
+  "directory": "C:/prog/AndroidTinyToolsFor1C/app/.cxx/RelWithDebInfo/3i3h3id5/armeabi-v7a",
+  "command": "C:\\PROGRA~2\\Android\\ANDROI~1\\ndk\\262~1.113\\TOOLCH~1\\llvm\\prebuilt\\WINDOW~1\\bin\\CLANG_~1.EXE --target=armv7-none-linux-androideabi23 --sysroot=\"C:/Program Files (x86)/Android/android-sdk/ndk/26.2.11394342/toolchains/llvm/prebuilt/windows-x86_64/sysroot\" -DAndroidTinyTools_EXPORTS -IC:/prog/AndroidTinyToolsFor1C/app/src/main/cpp/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security  -std=c++11 -fexceptions -O2 -g -DNDEBUG -fPIC -O2 -o CMakeFiles\\AndroidTinyTools.dir\\src\\main\\cpp\\jnienv.cpp.o -c C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\jnienv.cpp",
+  "file": "C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\jnienv.cpp"
+},
+{
+  "directory": "C:/prog/AndroidTinyToolsFor1C/app/.cxx/RelWithDebInfo/3i3h3id5/armeabi-v7a",
+  "command": "C:\\PROGRA~2\\Android\\ANDROI~1\\ndk\\262~1.113\\TOOLCH~1\\llvm\\prebuilt\\WINDOW~1\\bin\\CLANG_~1.EXE --target=armv7-none-linux-androideabi23 --sysroot=\"C:/Program Files (x86)/Android/android-sdk/ndk/26.2.11394342/toolchains/llvm/prebuilt/windows-x86_64/sysroot\" -DAndroidTinyTools_EXPORTS -IC:/prog/AndroidTinyToolsFor1C/app/src/main/cpp/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security  -std=c++11 -fexceptions -O2 -g -DNDEBUG -fPIC -O2 -o CMakeFiles\\AndroidTinyTools.dir\\src\\main\\cpp\\StrConv.cpp.o -c C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\StrConv.cpp",
+  "file": "C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\StrConv.cpp"
+},
+{
+  "directory": "C:/prog/AndroidTinyToolsFor1C/app/.cxx/RelWithDebInfo/3i3h3id5/armeabi-v7a",
+  "command": "C:\\PROGRA~2\\Android\\ANDROI~1\\ndk\\262~1.113\\TOOLCH~1\\llvm\\prebuilt\\WINDOW~1\\bin\\CLANG_~1.EXE --target=armv7-none-linux-androideabi23 --sysroot=\"C:/Program Files (x86)/Android/android-sdk/ndk/26.2.11394342/toolchains/llvm/prebuilt/windows-x86_64/sysroot\" -DAndroidTinyTools_EXPORTS -IC:/prog/AndroidTinyToolsFor1C/app/src/main/cpp/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security  -std=c++11 -fexceptions -O2 -g -DNDEBUG -fPIC -O2 -o CMakeFiles\\AndroidTinyTools.dir\\src\\main\\cpp\\BroadcastReceiver.cpp.o -c C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\BroadcastReceiver.cpp",
+  "file": "C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\BroadcastReceiver.cpp"
+},
+{
+  "directory": "C:/prog/AndroidTinyToolsFor1C/app/.cxx/RelWithDebInfo/3i3h3id5/armeabi-v7a",
+  "command": "C:\\PROGRA~2\\Android\\ANDROI~1\\ndk\\262~1.113\\TOOLCH~1\\llvm\\prebuilt\\WINDOW~1\\bin\\CLANG_~1.EXE --target=armv7-none-linux-androideabi23 --sysroot=\"C:/Program Files (x86)/Android/android-sdk/ndk/26.2.11394342/toolchains/llvm/prebuilt/windows-x86_64/sysroot\" -DAndroidTinyTools_EXPORTS -IC:/prog/AndroidTinyToolsFor1C/app/src/main/cpp/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security  -std=c++11 -fexceptions -O2 -g -DNDEBUG -fPIC -O2 -o CMakeFiles\\AndroidTinyTools.dir\\src\\main\\cpp\\BluetoothBarcodeScannerHandler.cpp.o -c C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\BluetoothBarcodeScannerHandler.cpp",
+  "file": "C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\BluetoothBarcodeScannerHandler.cpp"
+},
+{
+  "directory": "C:/prog/AndroidTinyToolsFor1C/app/.cxx/RelWithDebInfo/3i3h3id5/armeabi-v7a",
+  "command": "C:\\PROGRA~2\\Android\\ANDROI~1\\ndk\\262~1.113\\TOOLCH~1\\llvm\\prebuilt\\WINDOW~1\\bin\\CLANG_~1.EXE --target=armv7-none-linux-androideabi23 --sysroot=\"C:/Program Files (x86)/Android/android-sdk/ndk/26.2.11394342/toolchains/llvm/prebuilt/windows-x86_64/sysroot\" -DAndroidTinyTools_EXPORTS -IC:/prog/AndroidTinyToolsFor1C/app/src/main/cpp/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security  -std=c++11 -fexceptions -O2 -g -DNDEBUG -fPIC -O2 -o CMakeFiles\\AndroidTinyTools.dir\\src\\main\\cpp\\AddInNative.cpp.o -c C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\AddInNative.cpp",
+  "file": "C:\\prog\\AndroidTinyToolsFor1C\\app\\src\\main\\cpp\\AddInNative.cpp"
+}
+]

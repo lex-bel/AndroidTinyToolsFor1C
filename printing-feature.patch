@@ -1,0 +1,1326 @@
+From d15902adf41efebfbeac02562e39f3518521d372 Mon Sep 17 00:00:00 2001
+From: Grigogo <grigoriirozhkov@gmail.com>
+Date: Thu, 30 Jul 2026 11:10:41 +0300
+Subject: [PATCH] =?UTF-8?q?=D0=94=D0=BE=D0=B1=D0=B0=D0=B2=D0=BB=D0=B5?=
+ =?UTF-8?q?=D0=BD=20=D1=84=D1=83=D0=BD=D0=BA=D1=86=D0=B8=D0=BE=D0=BD=D0=B0?=
+ =?UTF-8?q?=D0=BB=20=D0=BF=D0=B5=D1=87=D0=B0=D1=82=D0=B8=20=D0=BD=D0=B0=20?=
+ =?UTF-8?q?=D0=BC=D0=BE=D0=B1=D0=B8=D0=BB=D1=8C=D0=BD=D1=8B=D1=85=20=D0=BF?=
+ =?UTF-8?q?=D1=80=D0=B8=D0=BD=D1=82=D0=B5=D1=80=D0=B0=D1=85=20=D0=BF=D0=BE?=
+ =?UTF-8?q?=20Bluetooth=20=D0=B8=20=D1=81=D0=B5=D1=82=D0=B8=20(ZPL,=20TSPL?=
+ =?UTF-8?q?,=20CPCL)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+— Новый класс PrinterClass.java: подключение по Bluetooth (SPP) и TCP/IP, отправка заданий печати с выбором кодировки (UTF-8, CP866, CP1251 и др.), запрос статуса принтера (~HS для ZPL, ESC !? для TSPL, ESC h для CPCL), отключение. Результаты возвращаются в JSON.
+— В AddInNative.h/.cpp зарегистрированы методы PrinterConnect, PrinterPrint, PrinterGetStatus, PrinterIsConnected, PrinterDisconnect; соединение закрывается при выгрузке компоненты.
+— В AndroidManifest.xml добавлено разрешение ACCESS_FINE_LOCATION (maxSdkVersion 30) для Bluetooth до Android 12.
+— В ANDROID_MANIFEST_EXTENSIONS.XML добавлены разрешения INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_CONNECT, BLUETOOTH_SCAN (Android 12+), ACCESS_FINE_LOCATION для сборки приложения 1С.
+— В README.md добавлен раздел с описанием методов печати и примерами вызова из 1С.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+---
+ AndroidTools/ANDROID_MANIFEST_EXTENSIONS.XML  |  10 +
+ README.md                                     | 166 +++++
+ app/src/main/AndroidManifest.xml              |   2 +
+ app/src/main/cpp/AddInNative.cpp              | 415 ++++++++++++-
+ app/src/main/cpp/AddInNative.h                |  10 +
+ .../androidtinytools/PrinterClass.java        | 565 ++++++++++++++++++
+ 6 files changed, 1167 insertions(+), 1 deletion(-)
+ create mode 100644 app/src/main/java/com/alexkmbk/androidtinytools/PrinterClass.java
+
+diff --git a/AndroidTools/ANDROID_MANIFEST_EXTENSIONS.XML b/AndroidTools/ANDROID_MANIFEST_EXTENSIONS.XML
+index 5ba8a92..b8fa617 100644
+--- a/AndroidTools/ANDROID_MANIFEST_EXTENSIONS.XML
++++ b/AndroidTools/ANDROID_MANIFEST_EXTENSIONS.XML
+@@ -4,6 +4,16 @@
+     <target xpath="/manifest" >
+         <uses-permission android:name="android.permission.VIBRATE"/>
+         <uses-permission android:name="android.permission.CAMERA"/>
++        <uses-permission android:name="android.permission.INTERNET"/>
++        <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
++        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
++        <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
++        <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
++        <!-- Android 12+ (API 31+) -->
++        <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
++        <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
++        <!-- До Android 12 работа с Bluetooth требует разрешения на местоположение -->
++        <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+         <uses-feature
+             android:name="android.hardware.camera"
+             android:required="false"/>
+diff --git a/README.md b/README.md
+index a4cf64a..8ad6524 100644
+--- a/README.md
++++ b/README.md
+@@ -6,6 +6,7 @@
+ 
+ - сканирование штрихкодов камерой устройства;
+ - работу с Bluetooth-сканером штрихкодов;
++- печать на мобильных принтерах этикеток по Bluetooth и сети (ZPL, TSPL, CPCL);
+ - HTTP-сервер с поддержкой входящих `POST` и `PUT` запросов;
+ - подписку на широковещательные сообщения Android;
+ - получение информации об устройстве (модель, производитель, `Android ID`, IP-адрес, уровень сигнала Wi-Fi);
+@@ -351,6 +352,171 @@ AndroidTools.StartHttpServer(8080, 30000);
+ КонецПроцедуры
+ ```
+ 
++### 12. Печать на мобильных принтерах (ZPL, TSPL, CPCL)
++
++Печать на мобильных принтерах этикеток по Bluetooth (SPP) или по сети (TCP/IP, обычно порт `9100`).
++Поддерживаются языки принтеров `ZPL` (Zebra), `TSPL` (TSC), `CPCL` (Zebra/Zebra-совместимые мобильные).
++
++Все методы возвращают JSON-строку с результатом (кроме `PrinterDisconnect` и `PrinterIsConnected`).
++
++`PrinterConnect(<ТипАдреса>, <Адрес>, [<Порт>], [<ТаймаутМс>])`
++
++Подключается к принтеру. Компонента поддерживает одно активное подключение:
++повторный вызов закрывает предыдущее соединение и открывает новое.
++
++Параметры:
++
++- `ТипАдреса` — строка:
++  - `"ipaddress"` — сетевой принтер (также принимаются `"ip"`, `"network"`, `"tcp"`, `"wifi"`);
++  - `"macaddress"` — принтер по Bluetooth (также принимаются `"mac"`, `"bluetooth"`, `"bt"`).
++- `Адрес` — IP-адрес/имя хоста (`"10.1.1.1"`) или MAC-адрес (`"XX:XX:XX:XX:XX:XX"`).
++- `Порт` — TCP-порт сетевого принтера. По умолчанию `9100`. Для Bluetooth игнорируется.
++- `ТаймаутМс` — таймаут подключения и операций ввода-вывода. По умолчанию `5000`.
++
++Возвращает JSON: `{"success": Булево, "error": Строка, "type": "bluetooth"|"network"}`.
++
++Для Bluetooth-принтера устройство должно быть предварительно сопряжено в настройках Android.
++Список сопряжённых устройств с MAC-адресами можно получить методом `GetBluetoothDevicesList()`.
++
++На Android 12+ (API 31+) при первом обращении запрашивается разрешение `BLUETOOTH_CONNECT`.
++Если разрешения не было — метод вернёт ошибку, а система покажет диалог запроса;
++после выдачи разрешения вызов нужно повторить.
++
++`PrinterPrint(<Язык>, <Данные>, [<Кодировка>])`
++
++Отправляет задание на печать в подключенный принтер.
++
++Параметры:
++
++- `Язык` — `"ZPL"`, `"TSPL"` или `"CPCL"`. Пустая строка — передать данные как есть.
++  Для `TSPL` и `CPCL` компонента автоматически добавляет перевод строки в конце задания, если его нет.
++- `Данные` — текст задания печати на выбранном языке.
++- `Кодировка` — кодировка, в которой данные передаются принтеру.
++  Поддерживаются: `UTF-8` (по умолчанию), `CP866`, `CP1251`, `LATIN1` и другие имена кодировок Java.
++  Для кириллицы в `ZPL` обычно используется `UTF-8` вместе с командой `^CI28`,
++  в `TSPL`/`CPCL` — кодировка, соответствующая загруженному в принтер шрифту (часто `CP866` или `CP1251`).
++
++Возвращает JSON: `{"success": Булево, "error": Строка, "bytes_sent": Число}`.
++
++`PrinterGetStatus([<Язык>])`
++
++Запрашивает статус принтера. Команда запроса зависит от языка:
++
++- `ZPL` — `~HS`;
++- `TSPL` — `ESC !?`;
++- `CPCL` — `ESC h` (интерпретация битов может отличаться у разных производителей — смотрите поле `raw`).
++
++Без параметра (или с пустой строкой) возвращает только состояние подключения.
++
++Возвращает JSON со свойствами (набор зависит от языка):
++
++| Поле | Тип | Описание |
++|------|-----|----------|
++| `success` | Булево | Запрос выполнен без ошибок |
++| `connected` | Булево | Есть активное подключение |
++| `ready` | Булево | Принтер готов к печати |
++| `paper_out` | Булево | Закончилась бумага |
++| `paused` | Булево | Принтер на паузе |
++| `head_open` | Булево | Открыта крышка (ZPL, TSPL) |
++| `ribbon_out` | Булево | Закончился риббон (ZPL, TSPL) |
++| `paper_jam` | Булево | Замятие бумаги (TSPL) |
++| `printing` / `busy` | Булево | Идёт печать (TSPL / CPCL) |
++| `raw` | Строка | Необработанный ответ принтера (для TSPL/CPCL — hex-байт) |
++| `error` | Строка | Текст ошибки, если есть |
++
++`PrinterIsConnected()`
++
++Возвращает `Истина`, если подключение к принтеру активно. Принтер при этом не опрашивается.
++
++`PrinterDisconnect()`
++
++Закрывает соединение с принтером. Соединение также закрывается автоматически при выгрузке компоненты.
++
++Пример (сетевой принтер, ZPL):
++
++```bsl
++Перем AndroidTools;
++
++Процедура ПриОткрытии()
++    AndroidTools = Новый("AddIn.AndroidTinyTools");
++КонецПроцедуры
++
++Процедура НапечататьЭтикетку(Команда)
++
++    // 1. Подключение принтера
++    Результат = ПрочитатьРезультат(AndroidTools.PrinterConnect("ipaddress", "10.1.1.1", 9100, 5000));
++    Если Не Результат.success Тогда
++        Сообщить("Ошибка подключения: " + Результат.error);
++        Возврат;
++    КонецЕсли;
++
++    // 2. Проверка статуса
++    Статус = ПрочитатьРезультат(AndroidTools.PrinterGetStatus("ZPL"));
++    Если Статус.success И Не Статус.ready Тогда
++        Сообщить("Принтер не готов (нет бумаги/пауза/открыта крышка)");
++    КонецЕсли;
++
++    // 3. Отправка данных на печать
++    Данные = "^XA^CI28"
++        + "^FO50,50^A0N,40,40^FDТестовая этикетка^FS"
++        + "^FO50,120^BY2^BCN,80,Y,N,N^FD123456789^FS"
++        + "^XZ";
++    Результат = ПрочитатьРезультат(AndroidTools.PrinterPrint("ZPL", Данные, "UTF-8"));
++    Если Не Результат.success Тогда
++        Сообщить("Ошибка печати: " + Результат.error);
++    КонецЕсли;
++
++    // 4. Отключение принтера
++    AndroidTools.PrinterDisconnect();
++
++КонецПроцедуры
++
++Функция ПрочитатьРезультат(JSONСтрока)
++    Чтение = Новый ЧтениеJSON;
++    Чтение.УстановитьСтроку(JSONСтрока);
++    Возврат ПрочитатьJSON(Чтение);
++КонецФункции
++```
++
++Пример (Bluetooth-принтер, TSPL):
++
++```bsl
++Процедура НапечататьПоBluetooth(Команда)
++
++    Результат = ПрочитатьРезультат(
++        AndroidTools.PrinterConnect("macaddress", "00:11:22:33:44:55"));
++    Если Не Результат.success Тогда
++        Сообщить("Ошибка подключения: " + Результат.error);
++        Возврат;
++    КонецЕсли;
++
++    Данные = "SIZE 58 mm,40 mm" + Символы.ПС
++        + "GAP 2 mm,0" + Символы.ПС
++        + "CLS" + Символы.ПС
++        + "TEXT 30,30,""0"",0,10,10,""Тест""" + Символы.ПС
++        + "BARCODE 30,90,""128"",70,1,0,2,2,""123456789""" + Символы.ПС
++        + "PRINT 1";
++    Результат = ПрочитатьРезультат(AndroidTools.PrinterPrint("TSPL", Данные, "CP866"));
++    Если Не Результат.success Тогда
++        Сообщить("Ошибка печати: " + Результат.error);
++    КонецЕсли;
++
++    AndroidTools.PrinterDisconnect();
++
++КонецПроцедуры
++```
++
++Пример задания CPCL:
++
++```bsl
++Данные = "! 0 200 200 320 1" + Символы.ПС
++    + "TEXT 4 0 30 40 Тест" + Символы.ПС
++    + "BARCODE 128 1 1 50 30 120 123456789" + Символы.ПС
++    + "FORM" + Символы.ПС
++    + "PRINT";
++Результат = ПрочитатьРезультат(AndroidTools.PrinterPrint("CPCL", Данные, "CP1251"));
++```
++
+ ## Сборка
+ 
+ Для сборки используется:
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index d4cdacb..ae40409 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -6,6 +6,8 @@
+     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
++    <!-- До Android 12 работа с Bluetooth требует разрешения на местоположение -->
++    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+     <uses-permission android:name="android.permission.VIBRATE"/>
+diff --git a/app/src/main/cpp/AddInNative.cpp b/app/src/main/cpp/AddInNative.cpp
+index 255da0f..d5d348a 100644
+--- a/app/src/main/cpp/AddInNative.cpp
++++ b/app/src/main/cpp/AddInNative.cpp
+@@ -23,7 +23,12 @@ static const std::array<std::u16string, CAddInNative::eMethLast> osMethods{
+         u"stophttpserver",
+         u"httpserverrespond",
+         u"verifyrsapsssha256signature",
+-        u"getdeviceinfo"
++        u"getdeviceinfo",
++        u"printerconnect",
++        u"printerprint",
++        u"printerdisconnect",
++        u"printergetstatus",
++        u"printerisconnected"
+ };
+ 
+ AppCapabilities g_capabilities = eAppCapabilitiesInvalid;
+@@ -89,6 +94,7 @@ long CAddInNative::GetInfo()
+ void CAddInNative::Done()
+ {
+     StopHttpServer();
++    PrinterDisconnect();
+     m_iConnect = NULL;
+ }
+ /////////////////////////////////////////////////////////////////////////////
+@@ -223,6 +229,12 @@ long CAddInNative::GetNParams(const long lMethodNum)
+             return 1;
+         case eMethVerifyRsaPssSha256Signature:
+             return 3;
++        case eMethPrinterConnect:
++            return 4; // addressType, address, port, timeoutMs
++        case eMethPrinterPrint:
++            return 3; // language, data, encoding
++        case eMethPrinterGetStatus:
++            return 1; // language
+         default:
+             return 0;
+     }
+@@ -304,6 +316,63 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
+             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+             return false;
+         }
++        case eMethPrinterConnect:
++        {
++            if (lParamNum == 2) {
++                // port — стандартный порт RAW-печати
++                TV_VT(pvarParamDefValue) = VTYPE_I4;
++                pvarParamDefValue->lVal = 9100;
++                return true;
++            }
++            if (lParamNum == 3) {
++                // timeoutMs
++                TV_VT(pvarParamDefValue) = VTYPE_I4;
++                pvarParamDefValue->lVal = 5000;
++                return true;
++            }
++            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
++            return false;
++        }
++        case eMethPrinterPrint:
++        {
++            if (lParamNum == 2) {
++                // encoding — по умолчанию UTF-8.
++                // Используем VTYPE_PWSTR, а не VTYPE_EMPTY,
++                // иначе платформа 1С может считать параметр обязательным.
++                static const char16_t defEncoding[] = u"UTF-8";
++                const size_t len = (sizeof(defEncoding) / sizeof(char16_t)) - 1;
++                char16_t* str = nullptr;
++                if (m_iMemory && m_iMemory->AllocMemory(reinterpret_cast<void**>(&str), sizeof(defEncoding))) {
++                    memcpy(str, defEncoding, sizeof(defEncoding));
++                    TV_VT(pvarParamDefValue) = VTYPE_PWSTR;
++                    pvarParamDefValue->pwstrVal = str;
++                    pvarParamDefValue->wstrLen = len;
++                    return true;
++                }
++                TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
++                return true;
++            }
++            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
++            return false;
++        }
++        case eMethPrinterGetStatus:
++        {
++            if (lParamNum == 0) {
++                // language — пустая строка: вернуть только состояние подключения
++                char16_t* emptyStr = nullptr;
++                if (m_iMemory && m_iMemory->AllocMemory(reinterpret_cast<void**>(&emptyStr), sizeof(char16_t))) {
++                    emptyStr[0] = 0;
++                    TV_VT(pvarParamDefValue) = VTYPE_PWSTR;
++                    pvarParamDefValue->pwstrVal = emptyStr;
++                    pvarParamDefValue->wstrLen = 0;
++                    return true;
++                }
++                TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
++                return true;
++            }
++            TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
++            return false;
++        }
+         default:
+         {
+             TV_VT(pvarParamDefValue) = VTYPE_EMPTY;
+@@ -351,6 +420,22 @@ bool CAddInNative::HasRetVal(const long lMethodNum)
+         {
+             return true;
+         }
++        case eMethPrinterConnect:
++        {
++            return true;
++        }
++        case eMethPrinterPrint:
++        {
++            return true;
++        }
++        case eMethPrinterGetStatus:
++        {
++            return true;
++        }
++        case eMethPrinterIsConnected:
++        {
++            return true;
++        }
+         default:
+             return false;
+     }
+@@ -408,6 +493,11 @@ bool CAddInNative::CallAsProc(const long lMethodNum,
+             StopHttpServer();
+             return true;
+         }
++        case eMethPrinterDisconnect:
++        {
++            PrinterDisconnect();
++            return true;
++        }
+         default:
+             return false;
+     }
+@@ -460,6 +550,26 @@ bool CAddInNative::CallAsFunc(const long lMethodNum,
+             GetDeviceInfo(pvarRetValue);
+             return true;
+         }
++        case eMethPrinterConnect:
++        {
++            PrinterConnect(pvarRetValue, paParams, lSizeArray);
++            return true;
++        }
++        case eMethPrinterPrint:
++        {
++            PrinterPrint(pvarRetValue, paParams, lSizeArray);
++            return true;
++        }
++        case eMethPrinterGetStatus:
++        {
++            PrinterGetStatus(pvarRetValue, paParams, lSizeArray);
++            return true;
++        }
++        case eMethPrinterIsConnected:
++        {
++            PrinterIsConnected(pvarRetValue);
++            return true;
++        }
+         default:
+             return false;
+     }
+@@ -1202,6 +1312,309 @@ void CAddInNative::GetDeviceInfo(tVariant* pvarRetValue) {
+     }
+ }
+ 
++void CAddInNative::PrinterConnect(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
++
++    TV_VT(pvarRetValue) = VTYPE_PWSTR;
++    pvarRetValue->wstrLen = 0;
++
++    if (lSizeArray < 2 || TV_VT(&paParams[0]) != VTYPE_PWSTR || TV_VT(&paParams[1]) != VTYPE_PWSTR) {
++        return;
++    }
++
++    IAndroidComponentHelper* helper;
++    jclass cc;
++    jobject obj;
++    IAddInDefBaseEx* cnn;
++
++    cnn = m_iConnect;
++    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
++
++    if (helper)
++    {
++        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
++
++        if (ccloc)
++        {
++            JNIEnv* jenv = getJniEnv();
++            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
++            jenv->DeleteLocalRef(ccloc);
++            jobject activity = helper->GetActivity();
++            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
++
++            jobject objloc = jenv->NewObject(cc, ctorID, activity);
++            if (objloc)
++            {
++                obj = jenv->NewGlobalRef(objloc);
++                jenv->DeleteLocalRef(objloc);
++            }
++            else
++            {
++                jenv->DeleteLocalRef(activity);
++                jenv->DeleteGlobalRef(cc);
++                return;
++            }
++
++            jint port = 9100;
++            jint timeoutMs = 5000;
++            if (lSizeArray > 2 && TV_VT(&paParams[2]) == VTYPE_I4) {
++                port = (jint)paParams[2].lVal;
++            }
++            if (lSizeArray > 3 && TV_VT(&paParams[3]) == VTYPE_I4) {
++                timeoutMs = (jint)paParams[3].lVal;
++            }
++
++            jstring addressType = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
++            jstring address = jenv->NewString(reinterpret_cast<const jchar *>(paParams[1].pwstrVal), paParams[1].wstrLen);
++
++            jstring res = (jstring)jenv->CallObjectMethod(
++                    obj,
++                    jenv->GetMethodID(cc, "connect", "(Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;"),
++                    addressType,
++                    address,
++                    port,
++                    timeoutMs
++            );
++
++            if (res != nullptr)
++            {
++                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
++                jenv->DeleteLocalRef(res);
++            }
++
++            jenv->DeleteLocalRef(addressType);
++            jenv->DeleteLocalRef(address);
++            jenv->DeleteLocalRef(activity);
++            jenv->DeleteGlobalRef(obj);
++            jenv->DeleteGlobalRef(cc);
++        }
++    }
++}
++
++void CAddInNative::PrinterPrint(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
++
++    TV_VT(pvarRetValue) = VTYPE_PWSTR;
++    pvarRetValue->wstrLen = 0;
++
++    if (lSizeArray < 2 || TV_VT(&paParams[0]) != VTYPE_PWSTR || TV_VT(&paParams[1]) != VTYPE_PWSTR) {
++        return;
++    }
++
++    IAndroidComponentHelper* helper;
++    jclass cc;
++    jobject obj;
++    IAddInDefBaseEx* cnn;
++
++    cnn = m_iConnect;
++    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
++
++    if (helper)
++    {
++        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
++
++        if (ccloc)
++        {
++            JNIEnv* jenv = getJniEnv();
++            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
++            jenv->DeleteLocalRef(ccloc);
++            jobject activity = helper->GetActivity();
++            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
++
++            jobject objloc = jenv->NewObject(cc, ctorID, activity);
++            if (objloc)
++            {
++                obj = jenv->NewGlobalRef(objloc);
++                jenv->DeleteLocalRef(objloc);
++            }
++            else
++            {
++                jenv->DeleteLocalRef(activity);
++                jenv->DeleteGlobalRef(cc);
++                return;
++            }
++
++            jstring language = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
++            jstring data = jenv->NewString(reinterpret_cast<const jchar *>(paParams[1].pwstrVal), paParams[1].wstrLen);
++
++            jstring encoding;
++            if (lSizeArray > 2 && TV_VT(&paParams[2]) == VTYPE_PWSTR && paParams[2].wstrLen > 0) {
++                encoding = jenv->NewString(reinterpret_cast<const jchar *>(paParams[2].pwstrVal), paParams[2].wstrLen);
++            } else {
++                encoding = jenv->NewStringUTF("UTF-8");
++            }
++
++            jstring res = (jstring)jenv->CallObjectMethod(
++                    obj,
++                    jenv->GetMethodID(cc, "print", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
++                    language,
++                    data,
++                    encoding
++            );
++
++            if (res != nullptr)
++            {
++                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
++                jenv->DeleteLocalRef(res);
++            }
++
++            jenv->DeleteLocalRef(language);
++            jenv->DeleteLocalRef(data);
++            jenv->DeleteLocalRef(encoding);
++            jenv->DeleteLocalRef(activity);
++            jenv->DeleteGlobalRef(obj);
++            jenv->DeleteGlobalRef(cc);
++        }
++    }
++}
++
++void CAddInNative::PrinterDisconnect() {
++
++    IAddInDefBaseEx* cnn = m_iConnect;
++    if (cnn == nullptr) {
++        return;
++    }
++
++    IAndroidComponentHelper* helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
++
++    if (helper)
++    {
++        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
++
++        if (ccloc)
++        {
++            JNIEnv* jenv = getJniEnv();
++            jclass cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
++            jenv->DeleteLocalRef(ccloc);
++            jobject activity = helper->GetActivity();
++            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
++
++            jobject objloc = jenv->NewObject(cc, ctorID, activity);
++            if (objloc)
++            {
++                jobject obj = jenv->NewGlobalRef(objloc);
++                jenv->DeleteLocalRef(objloc);
++                jenv->CallVoidMethod(obj, jenv->GetMethodID(cc, "disconnect", "()V"));
++                jenv->DeleteGlobalRef(obj);
++            }
++
++            jenv->DeleteLocalRef(activity);
++            jenv->DeleteGlobalRef(cc);
++        }
++    }
++}
++
++void CAddInNative::PrinterGetStatus(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray) {
++
++    TV_VT(pvarRetValue) = VTYPE_PWSTR;
++    pvarRetValue->wstrLen = 0;
++
++    IAndroidComponentHelper* helper;
++    jclass cc;
++    jobject obj;
++    IAddInDefBaseEx* cnn;
++
++    cnn = m_iConnect;
++    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
++
++    if (helper)
++    {
++        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
++
++        if (ccloc)
++        {
++            JNIEnv* jenv = getJniEnv();
++            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
++            jenv->DeleteLocalRef(ccloc);
++            jobject activity = helper->GetActivity();
++            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
++
++            jobject objloc = jenv->NewObject(cc, ctorID, activity);
++            if (objloc)
++            {
++                obj = jenv->NewGlobalRef(objloc);
++                jenv->DeleteLocalRef(objloc);
++            }
++            else
++            {
++                jenv->DeleteLocalRef(activity);
++                jenv->DeleteGlobalRef(cc);
++                return;
++            }
++
++            jstring language;
++            if (lSizeArray > 0 && TV_VT(&paParams[0]) == VTYPE_PWSTR && paParams[0].wstrLen > 0) {
++                language = jenv->NewString(reinterpret_cast<const jchar *>(paParams[0].pwstrVal), paParams[0].wstrLen);
++            } else {
++                language = jenv->NewStringUTF("");
++            }
++
++            jstring res = (jstring)jenv->CallObjectMethod(
++                    obj,
++                    jenv->GetMethodID(cc, "getStatus", "(Ljava/lang/String;)Ljava/lang/String;"),
++                    language
++            );
++
++            if (res != nullptr)
++            {
++                pvarRetValue->wstrLen = jstring2v8string(jenv, m_iMemory, res, &(pvarRetValue->pwstrVal)) / sizeof(uint16_t) - 1;
++                jenv->DeleteLocalRef(res);
++            }
++
++            jenv->DeleteLocalRef(language);
++            jenv->DeleteLocalRef(activity);
++            jenv->DeleteGlobalRef(obj);
++            jenv->DeleteGlobalRef(cc);
++        }
++    }
++}
++
++void CAddInNative::PrinterIsConnected(tVariant* pvarRetValue) {
++
++    TV_VT(pvarRetValue) = VTYPE_BOOL;
++    pvarRetValue->bVal = false;
++
++    IAndroidComponentHelper* helper;
++    jclass cc;
++    jobject obj;
++    IAddInDefBaseEx* cnn;
++
++    cnn = m_iConnect;
++    helper = (IAndroidComponentHelper*)cnn->GetInterface(eIAndroidComponentHelper);
++
++    if (helper)
++    {
++        jclass ccloc = helper->FindClass((const WCHAR_T*)u"com/alexkmbk/androidtinytools/PrinterClass");
++
++        if (ccloc)
++        {
++            JNIEnv* jenv = getJniEnv();
++            cc = static_cast<jclass>(jenv->NewGlobalRef(ccloc));
++            jenv->DeleteLocalRef(ccloc);
++            jobject activity = helper->GetActivity();
++            jmethodID ctorID = jenv->GetMethodID(cc, "<init>", "(Landroid/app/Activity;)V");
++
++            jobject objloc = jenv->NewObject(cc, ctorID, activity);
++            if (objloc)
++            {
++                obj = jenv->NewGlobalRef(objloc);
++                jenv->DeleteLocalRef(objloc);
++            }
++            else
++            {
++                jenv->DeleteLocalRef(activity);
++                jenv->DeleteGlobalRef(cc);
++                return;
++            }
++
++            jboolean connected = jenv->CallBooleanMethod(obj, jenv->GetMethodID(cc, "isConnected", "()Z"));
++            pvarRetValue->bVal = (connected == JNI_TRUE);
++
++            jenv->DeleteLocalRef(activity);
++            jenv->DeleteGlobalRef(obj);
++            jenv->DeleteGlobalRef(cc);
++        }
++    }
++}
++
+ static const char16_t g_EventSource[] = u"AndroidTinyTools";
+ static const char16_t g_OnBarcodeEventName[] = u"Barcode";         // Bluetooth-сканер
+ static const char16_t g_OnCameraBarcodeEventName[] = u"CameraBarcode"; // Камера устройства
+diff --git a/app/src/main/cpp/AddInNative.h b/app/src/main/cpp/AddInNative.h
+index 309ada0..acbeefb 100644
+--- a/app/src/main/cpp/AddInNative.h
++++ b/app/src/main/cpp/AddInNative.h
+@@ -52,6 +52,11 @@ public:
+         eMethHttpServerRespond = 14,
+         eMethVerifyRsaPssSha256Signature = 15,
+         eMethGetDeviceInfo = 16,
++        eMethPrinterConnect = 17,
++        eMethPrinterPrint = 18,
++        eMethPrinterDisconnect = 19,
++        eMethPrinterGetStatus = 20,
++        eMethPrinterIsConnected = 21,
+         eMethLast      // Always last
+     };
+ 
+@@ -109,6 +114,11 @@ private:
+     void HttpServerRespond(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+     void VerifyRsaPssSha256Signature(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
+     void GetDeviceInfo(tVariant* pvarRetValue);
++    void PrinterConnect(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
++    void PrinterPrint(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
++    void PrinterDisconnect();
++    void PrinterGetStatus(tVariant* pvarRetValue, tVariant* paParams, const long lSizeArray);
++    void PrinterIsConnected(tVariant* pvarRetValue);
+     void StopBroadcastReceiver();
+ 
+     BroadcastReceiver broadcastReceiver;
+diff --git a/app/src/main/java/com/alexkmbk/androidtinytools/PrinterClass.java b/app/src/main/java/com/alexkmbk/androidtinytools/PrinterClass.java
+new file mode 100644
+index 0000000..04262f8
+--- /dev/null
++++ b/app/src/main/java/com/alexkmbk/androidtinytools/PrinterClass.java
+@@ -0,0 +1,565 @@
++package com.alexkmbk.androidtinytools;
++
++import android.annotation.SuppressLint;
++import android.app.Activity;
++import android.bluetooth.BluetoothAdapter;
++import android.bluetooth.BluetoothDevice;
++import android.bluetooth.BluetoothManager;
++import android.bluetooth.BluetoothSocket;
++import android.content.Context;
++
++import org.json.JSONException;
++import org.json.JSONObject;
++
++import java.io.ByteArrayOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.net.InetSocketAddress;
++import java.net.Socket;
++import java.nio.charset.Charset;
++import java.nio.charset.StandardCharsets;
++import java.util.UUID;
++import java.util.concurrent.Callable;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++import java.util.concurrent.Future;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.TimeoutException;
++
++/**
++ * Печать на мобильных принтерах этикеток (ZPL, TSPL, CPCL)
++ * по Bluetooth (SPP) или по сети (TCP/IP, обычно порт 9100).
++ */
++public class PrinterClass {
++
++    private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
++    private static final int DEFAULT_TCP_PORT = 9100;
++    private static final int DEFAULT_TIMEOUT_MS = 5000;
++    // пауза, после которой ответ принтера на запрос статуса считается полученным полностью
++    private static final int RESPONSE_QUIET_MS = 300;
++
++    // Одно активное подключение на приложение: объект PrinterClass создаётся заново
++    // при каждом вызове из нативного кода, поэтому состояние хранится статически.
++    private static final Object lock = new Object();
++    private static ExecutorService executor;
++    private static Socket tcpSocket;
++    private static BluetoothSocket btSocket;
++    private static OutputStream outStream;
++    private static InputStream inStream;
++    private static int ioTimeoutMs = DEFAULT_TIMEOUT_MS;
++
++    private final Activity mContext;
++
++    public PrinterClass(Activity mContext) {
++        this.mContext = mContext;
++    }
++
++    /**
++     * Подключение к принтеру.
++     *
++     * @param addressType "ipaddress" (сеть) или "macaddress" (Bluetooth)
++     * @param address     IP-адрес/имя хоста или MAC-адрес вида XX:XX:XX:XX:XX:XX
++     * @param port        TCP-порт (для сетевого принтера), по умолчанию 9100
++     * @param timeoutMs   таймаут подключения и операций ввода-вывода
++     * @return JSON: {"success":Булево, "error":Строка, "type":"bluetooth"|"network"}
++     */
++    public String connect(String addressType, String address, int port, int timeoutMs) {
++
++        String type = addressType == null ? "" : addressType.trim().toLowerCase();
++        final String addr = address == null ? "" : address.trim();
++        if (addr.isEmpty()) {
++            return errorJson("Не указан адрес принтера");
++        }
++
++        final boolean bluetooth;
++        if (type.equals("macaddress") || type.equals("mac") || type.equals("bluetooth") || type.equals("bt")) {
++            bluetooth = true;
++        } else if (type.equals("ipaddress") || type.equals("ip") || type.equals("network")
++                || type.equals("tcp") || type.equals("wifi")) {
++            bluetooth = false;
++        } else {
++            return errorJson("Неизвестный тип адреса: \"" + addressType
++                    + "\". Ожидается \"ipaddress\" или \"macaddress\"");
++        }
++
++        if (bluetooth && !Utils.checkBluetoothPermissions(mContext)) {
++            return errorJson("Нет разрешений Bluetooth. Разрешения запрошены у пользователя — повторите подключение.");
++        }
++
++        final int fTimeout = timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
++        final int fPort = port > 0 ? port : DEFAULT_TCP_PORT;
++
++        synchronized (lock) {
++            closeConnection();
++            ioTimeoutMs = fTimeout;
++        }
++
++        return runOnWorker(fTimeout + 2000L, new Callable<String>() {
++            @Override
++            public String call() throws Exception {
++                if (bluetooth) {
++                    connectBluetooth(addr);
++                } else {
++                    connectNetwork(addr, fPort, fTimeout);
++                }
++                JSONObject res = new JSONObject();
++                res.put("success", true);
++                res.put("error", "");
++                res.put("type", bluetooth ? "bluetooth" : "network");
++                return res.toString();
++            }
++        });
++    }
++
++    /**
++     * Отправка данных на печать.
++     *
++     * @param language "ZPL", "TSPL", "CPCL" или "" (передать как есть)
++     * @param data     текст задания печати
++     * @param encoding кодировка данных: UTF-8 (по умолчанию), CP866, CP1251, LATIN1 и т.п.
++     * @return JSON: {"success":Булево, "error":Строка, "bytes_sent":Число}
++     */
++    public String print(String language, String data, String encoding) {
++
++        if (data == null || data.isEmpty()) {
++            return errorJson("Не переданы данные для печати");
++        }
++
++        final Charset charset;
++        try {
++            charset = resolveCharset(encoding);
++        } catch (Exception e) {
++            return errorJson("Неизвестная кодировка: " + encoding);
++        }
++
++        String lang = normalizeLanguage(language);
++        if (lang == null) {
++            return errorJson("Неизвестный язык принтера: \"" + language
++                    + "\". Ожидается ZPL, TSPL или CPCL");
++        }
++
++        if (!isConnected()) {
++            return errorJson("Принтер не подключен");
++        }
++
++        String payload = data;
++        // TSPL и CPCL требуют перевода строки после последней команды
++        if ((lang.equals("TSPL") || lang.equals("CPCL")) && !payload.endsWith("\n")) {
++            payload = payload + "\r\n";
++        }
++        final byte[] bytes = payload.getBytes(charset);
++
++        // запас времени на передачу больших заданий по Bluetooth (~10 КБ/с в худшем случае)
++        long writeTimeout = ioTimeoutMs + bytes.length / 10L + 2000L;
++
++        return runOnWorker(writeTimeout, new Callable<String>() {
++            @Override
++            public String call() throws Exception {
++                OutputStream out;
++                synchronized (lock) {
++                    out = outStream;
++                }
++                if (out == null) {
++                    throw new IOException("Принтер не подключен");
++                }
++                int offset = 0;
++                while (offset < bytes.length) {
++                    int len = Math.min(4096, bytes.length - offset);
++                    out.write(bytes, offset, len);
++                    offset += len;
++                }
++                out.flush();
++
++                JSONObject res = new JSONObject();
++                res.put("success", true);
++                res.put("error", "");
++                res.put("bytes_sent", bytes.length);
++                return res.toString();
++            }
++        });
++    }
++
++    /** Отключение от принтера. */
++    public void disconnect() {
++        synchronized (lock) {
++            closeConnection();
++        }
++    }
++
++    /** Проверка наличия активного подключения (без обращения к принтеру). */
++    public boolean isConnected() {
++        synchronized (lock) {
++            if (btSocket != null) {
++                return btSocket.isConnected();
++            }
++            if (tcpSocket != null) {
++                return tcpSocket.isConnected() && !tcpSocket.isClosed();
++            }
++            return false;
++        }
++    }
++
++    /**
++     * Запрос статуса принтера.
++     *
++     * @param language "ZPL", "TSPL", "CPCL" — язык определяет команду запроса статуса.
++     *                 Пустая строка — вернуть только состояние подключения.
++     * @return JSON со свойствами connected, raw и флагами состояния (зависят от языка)
++     */
++    public String getStatus(String language) {
++
++        final String lang = normalizeLanguage(language);
++        boolean connected = isConnected();
++
++        if (lang == null || lang.equals("RAW") || !connected) {
++            try {
++                JSONObject res = new JSONObject();
++                res.put("success", lang != null);
++                res.put("connected", connected);
++                res.put("error", lang == null ? "Неизвестный язык принтера: \"" + language + "\"" : "");
++                return res.toString();
++            } catch (JSONException e) {
++                return errorJson(e.getMessage());
++            }
++        }
++
++        return runOnWorker(ioTimeoutMs + 2000L, new Callable<String>() {
++            @Override
++            public String call() throws Exception {
++                OutputStream out;
++                InputStream in;
++                synchronized (lock) {
++                    out = outStream;
++                    in = inStream;
++                }
++                if (out == null || in == null) {
++                    throw new IOException("Принтер не подключен");
++                }
++
++                drainInput(in);
++
++                byte[] query;
++                if (lang.equals("ZPL")) {
++                    query = "~HS".getBytes(StandardCharsets.US_ASCII);
++                } else if (lang.equals("TSPL")) {
++                    query = new byte[]{0x1B, '!', '?'};
++                } else { // CPCL
++                    query = new byte[]{0x1B, 'h'};
++                }
++                out.write(query);
++                out.flush();
++
++                byte[] response = readResponse(in, ioTimeoutMs);
++
++                JSONObject res = new JSONObject();
++                res.put("success", true);
++                res.put("connected", true);
++                res.put("language", lang);
++                res.put("error", response.length == 0 ? "Принтер не ответил на запрос статуса" : "");
++
++                if (lang.equals("ZPL")) {
++                    parseZplStatus(response, res);
++                } else if (lang.equals("TSPL")) {
++                    parseTsplStatus(response, res);
++                } else {
++                    parseCpclStatus(response, res);
++                }
++                return res.toString();
++            }
++        });
++    }
++
++    // ------------------------------------------------------------------ private
++
++    @SuppressLint("MissingPermission")
++    private void connectBluetooth(String macAddress) throws IOException {
++
++        BluetoothManager bluetoothManager =
++                (BluetoothManager) mContext.getSystemService(Context.BLUETOOTH_SERVICE);
++        BluetoothAdapter adapter = bluetoothManager == null ? null : bluetoothManager.getAdapter();
++        if (adapter == null) {
++            throw new IOException("Отсутствует поддержка Bluetooth");
++        }
++        if (!adapter.isEnabled()) {
++            throw new IOException("Bluetooth выключен");
++        }
++
++        String mac = macAddress.toUpperCase();
++        if (!BluetoothAdapter.checkBluetoothAddress(mac)) {
++            throw new IOException("Некорректный MAC-адрес: " + macAddress);
++        }
++
++        BluetoothDevice device = adapter.getRemoteDevice(mac);
++        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(SPP_UUID);
++
++        adapter.cancelDiscovery();
++
++        try {
++            socket.connect();
++        } catch (IOException e) {
++            try {
++                socket.close();
++            } catch (IOException ignored) {
++            }
++            throw new IOException("Не удалось подключиться к принтеру " + mac + ": " + e.getMessage());
++        }
++
++        synchronized (lock) {
++            btSocket = socket;
++            outStream = socket.getOutputStream();
++            inStream = socket.getInputStream();
++        }
++    }
++
++    private void connectNetwork(String host, int port, int timeoutMs) throws IOException {
++
++        Socket socket = new Socket();
++        try {
++            socket.connect(new InetSocketAddress(host, port), timeoutMs);
++            socket.setSoTimeout(timeoutMs);
++            socket.setTcpNoDelay(true);
++        } catch (IOException e) {
++            try {
++                socket.close();
++            } catch (IOException ignored) {
++            }
++            throw new IOException("Не удалось подключиться к " + host + ":" + port + ": " + e.getMessage());
++        }
++
++        synchronized (lock) {
++            tcpSocket = socket;
++            outStream = socket.getOutputStream();
++            inStream = socket.getInputStream();
++        }
++    }
++
++    /**
++     * Выполняет операцию с сокетом в рабочем потоке (сеть на главном потоке запрещена).
++     * При таймауте принудительно закрывает соединение — это разблокирует зависшую операцию.
++     */
++    private String runOnWorker(long timeoutMs, Callable<String> task) {
++
++        Future<String> future;
++        synchronized (lock) {
++            if (executor == null || executor.isShutdown()) {
++                executor = Executors.newSingleThreadExecutor();
++            }
++            future = executor.submit(task);
++        }
++
++        try {
++            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
++        } catch (TimeoutException e) {
++            future.cancel(true);
++            synchronized (lock) {
++                closeConnection();
++            }
++            return errorJson("Таймаут операции (" + timeoutMs + " мс)");
++        } catch (ExecutionException e) {
++            Throwable cause = e.getCause() != null ? e.getCause() : e;
++            synchronized (lock) {
++                closeConnection();
++            }
++            String message = cause.getMessage();
++            return errorJson(message == null || message.isEmpty() ? cause.toString() : message);
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            return errorJson("Операция прервана");
++        }
++    }
++
++    // вызывается только под lock
++    private static void closeConnection() {
++        if (outStream != null) {
++            try {
++                outStream.close();
++            } catch (IOException ignored) {
++            }
++            outStream = null;
++        }
++        if (inStream != null) {
++            try {
++                inStream.close();
++            } catch (IOException ignored) {
++            }
++            inStream = null;
++        }
++        if (btSocket != null) {
++            try {
++                btSocket.close();
++            } catch (IOException ignored) {
++            }
++            btSocket = null;
++        }
++        if (tcpSocket != null) {
++            try {
++                tcpSocket.close();
++            } catch (IOException ignored) {
++            }
++            tcpSocket = null;
++        }
++    }
++
++    private static void drainInput(InputStream in) throws IOException {
++        byte[] chunk = new byte[512];
++        while (in.available() > 0) {
++            if (in.read(chunk) < 0) {
++                break;
++            }
++        }
++    }
++
++    private static byte[] readResponse(InputStream in, int timeoutMs) throws IOException {
++
++        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
++        byte[] chunk = new byte[512];
++        long deadline = System.currentTimeMillis() + timeoutMs;
++        long quietDeadline = deadline;
++
++        while (true) {
++            long now = System.currentTimeMillis();
++            if (now >= deadline || (buffer.size() > 0 && now >= quietDeadline)) {
++                break;
++            }
++            int available = in.available();
++            if (available > 0) {
++                int n = in.read(chunk, 0, Math.min(chunk.length, available));
++                if (n < 0) {
++                    break;
++                }
++                buffer.write(chunk, 0, n);
++                quietDeadline = System.currentTimeMillis() + RESPONSE_QUIET_MS;
++            } else {
++                try {
++                    Thread.sleep(50);
++                } catch (InterruptedException e) {
++                    Thread.currentThread().interrupt();
++                    break;
++                }
++            }
++        }
++        return buffer.toByteArray();
++    }
++
++    /**
++     * Ответ ZPL на ~HS: три строки, каждая обрамлена STX/ETX.
++     * Строка 1: aaa,b,c,dddd,... где b — нет бумаги, c — пауза.
++     * Строка 2: mmm,n,o,p,... где o — открыта крышка, p — закончился риббон.
++     */
++    private static void parseZplStatus(byte[] response, JSONObject res) throws JSONException {
++
++        String text = new String(response, StandardCharsets.US_ASCII);
++        res.put("raw", text.replace("\u0002", "").replace("\u0003", "").trim());
++
++        String[] lines = text.split("[\\u0002\\u0003\\r\\n]+");
++        int lineIndex = 0;
++        for (String line : lines) {
++            if (line.trim().isEmpty()) {
++                continue;
++            }
++            String[] fields = line.trim().split(",");
++            if (lineIndex == 0 && fields.length > 2) {
++                res.put("paper_out", "1".equals(fields[1]));
++                res.put("paused", "1".equals(fields[2]));
++            } else if (lineIndex == 1 && fields.length > 3) {
++                res.put("head_open", "1".equals(fields[2]));
++                res.put("ribbon_out", "1".equals(fields[3]));
++            }
++            lineIndex++;
++        }
++        res.put("ready", !res.optBoolean("paper_out", false)
++                && !res.optBoolean("paused", false)
++                && !res.optBoolean("head_open", false));
++    }
++
++    /** Ответ TSPL на ESC !? — один байт состояния (0x00 — принтер готов). */
++    private static void parseTsplStatus(byte[] response, JSONObject res) throws JSONException {
++
++        if (response.length < 1) {
++            return;
++        }
++        int status = response[0] & 0xFF;
++        res.put("raw", String.format("%02X", status));
++        res.put("head_open", (status & 0x01) != 0);
++        res.put("paper_jam", (status & 0x02) != 0);
++        res.put("paper_out", (status & 0x04) != 0);
++        res.put("ribbon_out", (status & 0x08) != 0);
++        res.put("paused", (status & 0x10) != 0);
++        res.put("printing", (status & 0x20) != 0);
++        res.put("ready", status == 0);
++    }
++
++    /**
++     * Ответ CPCL на ESC h — один байт состояния (Zebra):
++     * бит 0 — занят (идёт печать), бит 1 — нет бумаги, бит 2 — пауза.
++     * У других производителей значения битов могут отличаться — используйте поле raw.
++     */
++    private static void parseCpclStatus(byte[] response, JSONObject res) throws JSONException {
++
++        if (response.length < 1) {
++            return;
++        }
++        int status = response[0] & 0xFF;
++        res.put("raw", String.format("%02X", status));
++        res.put("busy", (status & 0x01) != 0);
++        res.put("paper_out", (status & 0x02) != 0);
++        res.put("paused", (status & 0x04) != 0);
++        res.put("ready", status == 0);
++    }
++
++    private static String normalizeLanguage(String language) {
++
++        if (language == null) {
++            return "RAW";
++        }
++        String lang = language.trim().toUpperCase();
++        if (lang.isEmpty() || lang.equals("RAW")) {
++            return "RAW";
++        }
++        if (lang.equals("ZPL") || lang.equals("ZPL2") || lang.equals("ZPLII") || lang.equals("ZPL II")) {
++            return "ZPL";
++        }
++        if (lang.equals("TSPL") || lang.equals("TSPL2") || lang.equals("TSC")) {
++            return "TSPL";
++        }
++        if (lang.equals("CPCL")) {
++            return "CPCL";
++        }
++        return null;
++    }
++
++    private static Charset resolveCharset(String encoding) {
++
++        if (encoding == null) {
++            return StandardCharsets.UTF_8;
++        }
++        String name = encoding.trim().toUpperCase();
++        if (name.isEmpty() || name.equals("UTF8") || name.equals("UTF-8")) {
++            return StandardCharsets.UTF_8;
++        }
++        if (name.equals("CP866") || name.equals("866") || name.equals("IBM866") || name.equals("DOS866")) {
++            return Charset.forName("IBM866");
++        }
++        if (name.equals("CP1251") || name.equals("1251") || name.equals("WINDOWS-1251")
++                || name.equals("WIN1251") || name.equals("ANSI")) {
++            return Charset.forName("windows-1251");
++        }
++        if (name.equals("LATIN1") || name.equals("ISO-8859-1") || name.equals("ASCII")) {
++            return StandardCharsets.ISO_8859_1;
++        }
++        return Charset.forName(encoding.trim());
++    }
++
++    private static String errorJson(String message) {
++        try {
++            JSONObject res = new JSONObject();
++            res.put("success", false);
++            res.put("error", message == null ? "" : message);
++            return res.toString();
++        } catch (JSONException e) {
++            return "{\"success\":false,\"error\":\"internal error\"}";
++        }
++    }
++}
+-- 
+2.50.1 (Apple Git-155)
+

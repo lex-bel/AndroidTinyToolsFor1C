@@ -1,0 +1,17 @@
+# ninja log v5
+25	389	7977830807111486	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/jnienv.cpp.o	a937cc6e1f37110
+42	529	7977830808693101	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/BroadcastReceiver.cpp.o	1a4b3e4f22f97edd
+1276	1532	7977923746919075	C:/prog/AndroidTinyToolsFor1C/AndroidToolsZip/libAndroidTinyTools_i386.so	353f77e941b58d2b
+63	547	7977830808902533	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/BluetoothBarcodeScannerHandler.cpp.o	ff6c9f0babb9220a
+1	1660	7977830819792846	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/StrConv.cpp.o	b85d7915acbd5ab6
+7	1275	7977923744787686	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/AddInNative.cpp.o	3aae3d7fe32dcab1
+8	299	7978484155479765	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/jnienv.cpp.o	4507267a0dbf59ce
+47	304	7978484155744175	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/BluetoothBarcodeScannerHandler.cpp.o	e267e16a2248a7c3
+35	307	7978484155734202	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/BroadcastReceiver.cpp.o	7a9a7d1fedd4557c
+21	1084	7978484163574947	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/StrConv.cpp.o	fbbdda2d0172c161
+61	1483	7978484167552107	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/AddInNative.cpp.o	ec69c61d6b078e91
+1483	1811	7978484170172752	C:/prog/AndroidTinyToolsFor1C/AndroidTools/libAndroidTinyTools_i386.so	b6d186b36e42c8d3
+7	1964	7978523226562198	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/AddInNative.cpp.o	ec69c61d6b078e91
+1965	2260	7978523228992495	C:/prog/AndroidTinyToolsFor1C/AndroidTools/libAndroidTinyTools_i386.so	b6d186b36e42c8d3
+11	1332	8003840319950103	CMakeFiles/AndroidTinyTools.dir/src/main/cpp/AddInNative.cpp.o	ec69c61d6b078e91
+1333	1625	8003840322321731	C:/prog/AndroidTinyToolsFor1C/AndroidTools/libAndroidTinyTools_i386.so	b6d186b36e42c8d3

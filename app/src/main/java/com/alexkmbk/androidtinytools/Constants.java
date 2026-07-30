@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Constants {
-    public static final String version = "2_2_41";
+    public static final String version = "2_2_42";
     public static final int REQUEST_BLUETOOTH_CONNECT_PERMISSION = 100;
     public static final int REQUEST_CAMERA_PERMISSION = 101;
 

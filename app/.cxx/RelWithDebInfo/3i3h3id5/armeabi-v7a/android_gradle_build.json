@@ -1,0 +1,38 @@
+{
+  "buildFiles": [
+    "C:\\prog\\AndroidTinyToolsFor1C\\app\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Program Files (x86)\\Android\\android-sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "C:\\prog\\AndroidTinyToolsFor1C\\app\\.cxx\\RelWithDebInfo\\3i3h3id5\\armeabi-v7a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Program Files (x86)\\Android\\android-sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "C:\\prog\\AndroidTinyToolsFor1C\\app\\.cxx\\RelWithDebInfo\\3i3h3id5\\armeabi-v7a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "AndroidTinyTools::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "armeabi-v7a",
+      "artifactName": "AndroidTinyTools",
+      "output": "C:\\prog\\AndroidTinyToolsFor1C\\AndroidTools\\libAndroidTinyTools_ARM.so",
+      "runtimeFiles": []
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "C:\\Program Files (x86)\\Android\\android-sdk\\ndk\\26.2.11394342\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe",
+      "cppCompilerExecutable": "C:\\Program Files (x86)\\Android\\android-sdk\\ndk\\26.2.11394342\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang++.exe"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

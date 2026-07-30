@@ -10,8 +10,9 @@
 /captures
 .externalNativeBuild
 /Package
-/app
+/app/release
 /libs
 /.idea
 /gradle
 *.log
+INSTALL_PRINTING.md
